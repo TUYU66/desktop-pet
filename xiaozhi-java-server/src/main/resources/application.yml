@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: xiaozhi-java-server
+  profiles:
+    active: dev
+  datasource:
+    url: jdbc:mysql://localhost:3306/xiaozhi?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+      database: 0
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.xml
+mybatis-plus:
+  mapper-locations: classpath*:mapper/**/*.xml
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  configuration:
+    map-underscore-to-camel-case: true
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+server:
+  port: 8000
+logging:
+  level:
+    com.xiaozhi: warn
+    org.springframework.web.reactive: info
+    com.baomidou.mybatisplus: warn
+    org.apache.ibatis: warn
+xiaozhi:
+  websocket:
+    path: /xiaozhi/v1/
+    heartbeat-interval: 30
+  ota:
+    base-url: http://localhost:8000
+    timezone-offset: 8
+  python-server:
+    base-url: http://localhost:8004

@@ -1,0 +1,1117 @@
+{
+  "version": 2,
+  "referenceTime": "2026-09-16T10:30:00+08:00",
+  "comparison": "语义等价即可，不要求key/content逐字相同；自动规则仅作筛查，原子性和归属仍需人工审阅报告。旧版本基线未执行。",
+  "cases": [
+    {
+      "id": "age",
+      "turns": [
+        "我21岁"
+      ],
+      "expected": [
+        {
+          "category": "profile",
+          "contains": [
+            "21|二十一"
+          ]
+        }
+      ],
+      "query": "我说过自己几岁？"
+    },
+    {
+      "id": "student",
+      "turns": [
+        "我是大学生"
+      ],
+      "expected": [
+        {
+          "category": "profile",
+          "contains": [
+            "大学"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "major",
+      "turns": [
+        "我本科读的是自动化"
+      ],
+      "expected": [
+        {
+          "category": "profile",
+          "contains": [
+            "本科",
+            "自动化"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "two_profile",
+      "turns": [
+        "我是大学生，今年21岁"
+      ],
+      "expected": [
+        {
+          "category": "profile",
+          "contains": [
+            "大学"
+          ]
+        },
+        {
+          "category": "profile",
+          "contains": [
+            "21|二十一"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hand_and_food",
+      "turns": [
+        "我是左撇子，喜欢吃西红柿"
+      ],
+      "expected": [
+        {
+          "category": "habit",
+          "contains": [
+            "左"
+          ]
+        },
+        {
+          "category": "preference",
+          "contains": [
+            "西红柿|番茄",
+            "喜欢|喜爱"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "negative_preference",
+      "turns": [
+        "我不喜欢摄影"
+      ],
+      "expected": [
+        {
+          "category": "preference",
+          "contains": [
+            "摄影",
+            "不喜欢|讨厌"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "habit",
+      "turns": [
+        "我每天晚上跑步"
+      ],
+      "expected": [
+        {
+          "category": "habit",
+          "contains": [
+            "每天",
+            "跑步"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "temporary",
+      "turns": [
+        "我今晚去跑步"
+      ],
+      "expected": []
+    },
+    {
+      "id": "hypothetical",
+      "turns": [
+        "如果以后养猫，我想叫它小花"
+      ],
+      "expected": []
+    },
+    {
+      "id": "negated_age",
+      "turns": [
+        "我不是21岁"
+      ],
+      "expected": [],
+      "review": "不建立肯定年龄21；本基准不将无确定年龄的孤立否定作为长期事实"
+    },
+    {
+      "id": "cats_dogs",
+      "turns": [
+        "我有三只猫两条狗"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "三|3"
+          ],
+          "excludes": [
+            "狗"
+          ]
+        },
+        {
+          "category": "relationship",
+          "contains": [
+            "狗",
+            "两|二|2"
+          ],
+          "excludes": [
+            "猫"
+          ]
+        }
+      ],
+      "query": "我有几只猫？",
+      "recallContains": [
+        "猫",
+        "三|3"
+      ]
+    },
+    {
+      "id": "pet_correction",
+      "turns": [
+        "我有三只猫两条狗",
+        "我说错了，我养了两只猫三条狗"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ],
+          "excludes": [
+            "狗"
+          ]
+        },
+        {
+          "category": "relationship",
+          "contains": [
+            "狗",
+            "三|3"
+          ],
+          "excludes": [
+            "猫"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "corrected",
+        "corrected"
+      ]
+    },
+    {
+      "id": "partial_correction",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        },
+        {
+          "category": "relationship",
+          "key": "用户的狗数量",
+          "content": "用户养有两条狗"
+        }
+      ],
+      "turns": [
+        "猫的数量说错了，我养的是两只猫，狗的数量没变"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ]
+        },
+        {
+          "category": "relationship",
+          "contains": [
+            "狗",
+            "两|二|2"
+          ]
+        }
+      ],
+      "preserveIds": [
+        2
+      ],
+      "lastReasons": [
+        "corrected"
+      ]
+    },
+    {
+      "id": "quantity_add",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        }
+      ],
+      "turns": [
+        "我又养了一只猫"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "四|4"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "changed"
+      ],
+      "query": "我以前有几只猫？",
+      "recallContains": [
+        "曾经",
+        "三|3"
+      ]
+    },
+    {
+      "id": "age_correction",
+      "initial": [
+        {
+          "category": "profile",
+          "key": "用户年龄",
+          "content": "用户22岁"
+        }
+      ],
+      "turns": [
+        "你记错了，我是21岁，不是22岁"
+      ],
+      "expected": [
+        {
+          "category": "profile",
+          "contains": [
+            "21|二十一"
+          ],
+          "excludes": [
+            "22|二十二"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "corrected"
+      ],
+      "query": "我多大？",
+      "recallExcludes": [
+        "22|二十二"
+      ]
+    },
+    {
+      "id": "goal_undated",
+      "turns": [
+        "我计划明年去洛杉矶留学，为此准备一年"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "洛杉矶",
+            "留学",
+            "2027"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "goal_complete",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户六级目标",
+          "content": "用户计划通过六级"
+        }
+      ],
+      "turns": [
+        "我的六级目标已经完成了"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "六级",
+            "完成|通过"
+          ]
+        },
+        {
+          "category": "event",
+          "contains": [
+            "六级",
+            "完成|通过"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "completed",
+        "new"
+      ],
+      "lastTargetIds": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "goal_cancel",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户考研目标",
+          "content": "用户计划考研"
+        }
+      ],
+      "turns": [
+        "我不准备考研了"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "考研",
+            "放弃|取消|不再|不准备"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "cancelled"
+      ],
+      "query": "我以前计划考研吗？",
+      "recallContains": [
+        "考研",
+        "closed"
+      ]
+    },
+    {
+      "id": "owner_separation",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        }
+      ],
+      "turns": [
+        "我的好朋友小王养有两只猫"
+      ],
+      "preserveIds": [
+        1
+      ],
+      "review": "允许保存朋友关系事实，也允许跳过；绝不能更新用户的猫数量"
+    },
+    {
+      "id": "same_topic_new_event",
+      "initial": [
+        {
+          "category": "event",
+          "key": "用户机器人比赛经历",
+          "content": "用户2025年参加机器人比赛",
+          "time": "2025年"
+        }
+      ],
+      "turns": [
+        "我2026年又参加了一次机器人比赛"
+      ],
+      "expected": [
+        {
+          "category": "event",
+          "contains": [
+            "2025",
+            "比赛"
+          ]
+        },
+        {
+          "category": "event",
+          "contains": [
+            "2026",
+            "比赛"
+          ]
+        }
+      ],
+      "preserveIds": [
+        1
+      ],
+      "lastReasons": [
+        "new"
+      ]
+    },
+    {
+      "id": "refusal",
+      "turns": [
+        "不要记住这条，我喜欢摄影"
+      ],
+      "expected": []
+    },
+    {
+      "id": "repeat_preference",
+      "turns": [
+        "我喜欢摄影",
+        "我喜欢摄影"
+      ],
+      "expected": [
+        {
+          "category": "preference",
+          "contains": [
+            "摄影",
+            "喜欢|喜爱"
+          ]
+        }
+      ],
+      "lastReasons": []
+    },
+    {
+      "id": "graduation",
+      "turns": [
+        "我今年大学毕业了"
+      ],
+      "expected": [
+        {
+          "category": "event",
+          "contains": [
+            "毕业",
+            "2026"
+          ],
+          "excludes": [
+            "入职|工作"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "six_level_plan",
+      "turns": [
+        "我准备今年考六级，接下来每天复习"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "六级",
+            "2026"
+          ]
+        }
+      ],
+      "review": "复习是计划，不能额外记为已经存在的习惯"
+    },
+    {
+      "id": "explicit_note",
+      "turns": [
+        "请记住我们私下约定的口头暗号是蓝色纸鹤"
+      ],
+      "expected": [
+        {
+          "category": "note",
+          "contains": [
+            "蓝色纸鹤"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "invalidate",
+      "initial": [
+        {
+          "category": "profile",
+          "key": "用户年龄",
+          "content": "用户21岁"
+        }
+      ],
+      "turns": [
+        "那条我21岁的记忆是错误信息，请作废删除"
+      ],
+      "expected": [],
+      "lastReasons": [
+        "invalidated"
+      ],
+      "query": "我几岁？",
+      "recallExcludes": [
+        "21|二十一"
+      ]
+    },
+    {
+      "id": "restart_goal",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户考研目标",
+          "content": "用户已放弃考研目标",
+          "status": "closed"
+        }
+      ],
+      "turns": [
+        "我重新决定考研了，准备投入一年备考"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "放弃",
+            "考研"
+          ]
+        },
+        {
+          "category": "goal",
+          "contains": [
+            "考研"
+          ]
+        }
+      ],
+      "preserveIds": [
+        1
+      ],
+      "lastReasons": [
+        "new"
+      ]
+    },
+    {
+      "id": "photography_preference_changed",
+      "initial": [
+        {
+          "category": "preference",
+          "key": "用户摄影偏好",
+          "content": "用户喜欢摄影"
+        }
+      ],
+      "turns": [
+        "我已经不喜欢摄影了"
+      ],
+      "expected": [
+        {
+          "category": "preference",
+          "contains": [
+            "摄影",
+            "不再喜欢|不喜欢"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "changed"
+      ],
+      "lastTargetIds": [
+        1
+      ]
+    },
+    {
+      "id": "abandon_graduate_goal",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户考研目标",
+          "content": "用户计划考研"
+        }
+      ],
+      "turns": [
+        "我放弃考研了"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "考研",
+            "放弃|取消"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "cancelled"
+      ],
+      "lastTargetIds": [
+        1
+      ]
+    },
+    {
+      "id": "reported_pet_state_correction",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        },
+        {
+          "category": "relationship",
+          "key": "用户的狗数量",
+          "content": "用户养有两只狗"
+        }
+      ],
+      "turns": [
+        "我说错了，我是养了两只猫三只狗"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ],
+          "excludes": [
+            "狗"
+          ]
+        },
+        {
+          "category": "relationship",
+          "contains": [
+            "狗",
+            "三|3"
+          ],
+          "excludes": [
+            "猫"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "corrected",
+        "corrected"
+      ],
+      "lastTargetIds": [
+        1,
+        2
+      ]
+    },
+    {
+      "id": "reported_current_cat_state",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        }
+      ],
+      "turns": [
+        "我现在只养了两只猫"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ],
+          "excludes": [
+            "三|3"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "changed"
+      ],
+      "lastTargetIds": [
+        1
+      ],
+      "review": "来源审查输入只检查新断言；绑定审查不能因旧三只与新两只不同而拒绝。"
+    },
+    {
+      "id": "reported_cancel_los_angeles",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户洛杉矶旅行计划",
+          "content": "用户计划去美国洛杉矶"
+        }
+      ],
+      "turns": [
+        "我不计划去洛杉矶了"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "洛杉矶",
+            "取消|放弃|不再|不计划|不去"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "cancelled"
+      ],
+      "lastTargetIds": [
+        1
+      ],
+      "review": "必须关闭原目标而非新增否定事实；history保留修改前计划及cancelled原因。"
+    },
+    {
+      "id": "reported_cats_changed_dogs_ended",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        },
+        {
+          "category": "relationship",
+          "key": "用户的狗数量",
+          "content": "用户养有两只狗"
+        }
+      ],
+      "turns": [
+        "我现在只养两只猫不养狗了"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ],
+          "excludes": [
+            "狗",
+            "三|3"
+          ]
+        },
+        {
+          "category": "relationship",
+          "contains": [
+            "狗",
+            "不再|不养|没有|零|0"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "changed",
+        "changed"
+      ],
+      "lastTargetIds": [
+        1,
+        2
+      ],
+      "review": "绝对数量和否定内容必须直接来自本轮candidate，不能被旧值覆盖；两个原ID更新，历史保留。"
+    },
+    {
+      "id": "reported_dogs_ended",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的狗数量",
+          "content": "用户养有两只狗"
+        }
+      ],
+      "turns": [
+        "我现在不养狗了"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "狗",
+            "不再|不养|没有|零|0"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "changed"
+      ],
+      "lastTargetIds": [
+        1
+      ]
+    },
+    {
+      "id": "reported_cancel_us_city_goal",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户洛杉矶出行计划",
+          "content": "用户计划去美国洛杉矶"
+        }
+      ],
+      "turns": [
+        "我不计划去美国了"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "美国|洛杉矶",
+            "取消|放弃|不再|不计划|不去"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "cancelled"
+      ],
+      "lastTargetIds": [
+        1
+      ]
+    },
+    {
+      "id": "reported_four_turn_sequence",
+      "turns": [
+        "我养了三只猫两只狗",
+        "我是左撇子，喜欢吃西红柿",
+        "我准备计划去美国洛杉矶",
+        "我说错了，我是养了两只猫三只狗"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ],
+          "excludes": [
+            "狗"
+          ]
+        },
+        {
+          "category": "relationship",
+          "contains": [
+            "狗",
+            "三|3"
+          ],
+          "excludes": [
+            "猫"
+          ]
+        },
+        {
+          "category": "habit",
+          "contains": [
+            "左"
+          ]
+        },
+        {
+          "category": "preference",
+          "contains": [
+            "西红柿|番茄"
+          ]
+        },
+        {
+          "category": "goal",
+          "contains": [
+            "洛杉矶"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "corrected",
+        "corrected"
+      ],
+      "review": "按顺序连续运行；洛杉矶轮不能新增左撇子/宠物，纠错必须修改原猫狗ID；核对每条source是否确实支持content。"
+    },
+    {
+      "id": "decision_case1_changed",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        }
+      ],
+      "turns": [
+        "我现在只养两只猫"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ],
+          "excludes": [
+            "三|3"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "changed"
+      ],
+      "lastTargetIds": [
+        1
+      ]
+    },
+    {
+      "id": "decision_case2_pronoun_corrected",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户的猫数量",
+          "content": "用户养有三只猫"
+        }
+      ],
+      "turns": [
+        "我说错了，其实只有两只"
+      ],
+      "expected": [
+        {
+          "category": "relationship",
+          "contains": [
+            "猫",
+            "两|二|2"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "corrected"
+      ],
+      "lastTargetIds": [
+        1
+      ],
+      "query": "我养几只猫？",
+      "recallExcludes": [
+        "三只|3只"
+      ]
+    },
+    {
+      "id": "decision_case3_country_cancel",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户洛杉矶出行计划",
+          "content": "用户计划去美国洛杉矶"
+        }
+      ],
+      "turns": [
+        "我不计划去美国了"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "美国|洛杉矶",
+            "取消|不计划|不再|放弃"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "cancelled"
+      ],
+      "lastTargetIds": [
+        1
+      ]
+    },
+    {
+      "id": "decision_case4_cancel_and_add",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户洛杉矶出行计划",
+          "content": "用户计划去美国洛杉矶"
+        }
+      ],
+      "turns": [
+        "我不计划去美国了，我计划去日本"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "美国|洛杉矶",
+            "取消|不计划|不再|放弃"
+          ]
+        },
+        {
+          "category": "goal",
+          "contains": [
+            "日本",
+            "计划|准备|打算|想去"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "cancelled",
+        "new"
+      ],
+      "lastTargetIds": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "decision_case5_complete_and_event",
+      "initial": [
+        {
+          "category": "goal",
+          "key": "用户六级目标",
+          "content": "用户计划通过六级"
+        }
+      ],
+      "turns": [
+        "我六级过了"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "status": "closed",
+          "contains": [
+            "六级",
+            "完成|通过"
+          ]
+        },
+        {
+          "category": "event",
+          "contains": [
+            "六级",
+            "通过|过了"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "completed",
+        "new"
+      ],
+      "lastTargetIds": [
+        1,
+        -1
+      ]
+    },
+    {
+      "id": "decision_case6_never_owned_invalidated",
+      "initial": [
+        {
+          "category": "relationship",
+          "key": "用户狗饲养情况",
+          "content": "用户养有一只狗"
+        }
+      ],
+      "turns": [
+        "你记错了，我从来没有养过狗"
+      ],
+      "expected": [],
+      "lastReasons": [
+        "invalidated"
+      ],
+      "lastTargetIds": [
+        1
+      ],
+      "query": "我养过狗吗？",
+      "recallExcludes": [
+        "一只狗"
+      ]
+    },
+    {
+      "id": "decision_case7_new_goal",
+      "initial": [],
+      "turns": [
+        "我计划去日本"
+      ],
+      "expected": [
+        {
+          "category": "goal",
+          "contains": [
+            "日本",
+            "计划|准备|打算|想去"
+          ]
+        }
+      ],
+      "lastReasons": [
+        "new"
+      ],
+      "lastTargetIds": [
+        -1
+      ]
+    }
+  ]
+}

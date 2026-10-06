@@ -1,0 +1,20 @@
+.motor-calibration { margin-top: 28px; padding-top: 22px; border-top: 1px solid #e3ebf6; color: #344761; }
+.motor-calibration-heading { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.motor-calibration h3 { margin: 0 0 6px; font-size: 16px; }
+.motor-calibration p, .motor-calibration li { font-size: 13px; line-height: 1.8; }
+.motor-calibration-heading p { margin: 0; color: #6b7e97; }
+.motor-calibration summary { cursor: pointer; padding: 16px 0; color: #315f9e; font-weight: 600; }
+.motor-calibration summary:focus-visible { outline: 2px solid #3867a6; outline-offset: 4px; }
+.motor-calibration .ant-alert { margin-bottom: 14px; }
+.motor-calibration-controls { display: flex; margin: 18px 0; }
+.motor-calibration-controls .ant-select { min-width: 110px; }
+.motor-calibration-readout { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 16px 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.motor-calibration-readout strong { color: #315f9e; }
+.motor-calibration-holding { margin: 0 0 16px; padding: 14px 16px; border-radius: 12px; background: #f0f5fc; }
+.motor-calibration-holding label { font-weight: 600; }
+.motor-calibration-holding span { font-size: 13px; color: #6b7e97; }
+.motor-calibration-holding p { margin: 8px 0 0; }
+.motor-calibration-result { margin-top: 14px; padding: 14px 16px; border: 1px solid #b8cee9; border-radius: 12px; background: #f7faff; }
+.motor-calibration-result p { margin: 0 0 10px; }
+.motor-calibration .ant-table-wrapper { margin: 16px 0; }
+@media(max-width:650px) { .motor-calibration-heading { flex-direction: column; } }

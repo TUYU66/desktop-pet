@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260929-task-arrangements" author="codex">
+  <addColumn tableName="user_todo">
+   <column name="deadline_at" type="bigint"/>
+   <column name="plan_id" type="varchar(36)"/>
+   <column name="occurrence_at" type="bigint"/>
+   <column name="deleted" type="boolean" defaultValueBoolean="false"><constraints nullable="false"/></column>
+  </addColumn>
+  <addColumn tableName="user_reminder">
+   <column name="task_id" type="varchar(36)"/>
+   <column name="original_due_at" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="followup_stage" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="followup_token" type="varchar(36)"/>
+  </addColumn>
+  <addColumn tableName="reminder_plan">
+   <column name="task_enabled" type="boolean" defaultValueBoolean="false"><constraints nullable="false"/></column>
+   <column name="task_date_enabled" type="boolean" defaultValueBoolean="false"><constraints nullable="false"/></column>
+   <column name="deadline_offset" type="bigint"/>
+   <column name="remind_offset" type="bigint"/>
+  </addColumn>
+  <createTable tableName="task_operation">
+   <column name="user_id" type="bigint"><constraints nullable="false" primaryKey="true"/></column>
+   <column name="request_id" type="varchar(36)"><constraints nullable="false" primaryKey="true"/></column>
+   <column name="request_body" type="text"><constraints nullable="false"/></column>
+   <column name="response_body" type="mediumtext"><constraints nullable="false"/></column>
+   <column name="created_at" type="bigint"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="user_todo" indexName="idx_task_owner_status"><column name="user_id"/><column name="deleted"/><column name="status"/></createIndex>
+  <createIndex tableName="user_reminder" indexName="idx_reminder_task"><column name="task_id"/></createIndex>
+  <sql>UPDATE user_reminder SET original_due_at=CASE WHEN requested_at&gt;0 THEN requested_at ELSE due_at END</sql>
+  <sql>UPDATE user_reminder r JOIN user_todo t ON t.reminder_id=r.id AND t.user_id=r.user_id SET r.task_id=t.id WHERE NOT EXISTS (SELECT 1 FROM user_todo other_task WHERE other_task.reminder_id=r.id AND other_task.id&lt;&gt;t.id)</sql>
+ </changeSet>
+</databaseChangeLog>

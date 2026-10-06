@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+
+    <include file="db/changelog/v1.0.0_init.xml"/>
+    <include file="db/changelog/v1.1.0_extend.xml"/>
+    <include file="db/changelog/v1.2.0_memory.xml"/>
+    <include file="db/changelog/v1.3.0_memory_facts.xml"/>
+    <include file="db/changelog/v1.4.0_reminders.xml"/>
+    <include file="db/changelog/v1.5.0_schedules.xml"/>
+    <include file="db/changelog/v1.5.1_reminder_requested_at.xml"/>
+    <include file="db/changelog/v1.5.2_reminder_music.xml"/>
+    <include file="db/changelog/v1.5.3_reminder_history.xml"/>
+    <include file="db/changelog/v1.6.0_semantic_memory.xml"/>
+    <include file="db/changelog/v1.7.0_todos.xml"/>
+    <include file="db/changelog/v1.8.0_reminder_track.xml"/>
+    <include file="db/changelog/v1.8.1_chat_history_page.xml"/>
+    <include file="db/changelog/v1.9.0_task_arrangements.xml"/>
+    <include file="db/changelog/v1.9.1_todo_schedule_split.xml"/>
+    <include file="db/changelog/v1.9.2_reminder_scheduled_at.xml"/>
+    <include file="db/changelog/v1.9.3_reminder_creation.xml"/>
+</databaseChangeLog>

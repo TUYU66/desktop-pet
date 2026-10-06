@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260914-reminder-music-settings" author="codex">
+  <createTable tableName="reminder_preferences">
+   <column name="user_id" type="bigint"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="music_volume" type="int" defaultValueNumeric="30"><constraints nullable="false"/></column>
+  </createTable>
+ </changeSet>
+</databaseChangeLog>

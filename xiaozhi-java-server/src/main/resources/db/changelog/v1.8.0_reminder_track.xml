@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+    <changeSet id="1.8.0-reminder-track" author="desktop-pet">
+        <addColumn tableName="reminder_preferences">
+            <column name="music_track_id" type="VARCHAR(24)" remarks="Shared music-library track ID; NULL uses original reminder melody"/>
+        </addColumn>
+        <rollback><dropColumn tableName="reminder_preferences" columnName="music_track_id"/></rollback>
+    </changeSet>
+</databaseChangeLog>

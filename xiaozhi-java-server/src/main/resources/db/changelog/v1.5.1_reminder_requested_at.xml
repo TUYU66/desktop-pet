@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260914-reminder-requested-at" author="codex">
+  <preConditions onFail="MARK_RAN" onError="HALT">
+   <not><columnExists tableName="user_reminder" columnName="requested_at"/></not>
+  </preConditions>
+  <addColumn tableName="user_reminder">
+   <column name="requested_at" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+  </addColumn>
+ </changeSet>
+ <changeSet id="20260914-reminder-requested-at-backfill" author="codex">
+  <!-- 早期绝对时间使用负initial_seconds。保留原日期，不能以已延后的due_at代替。 -->
+  <sql>UPDATE user_reminder SET requested_at=-initial_seconds, initial_seconds=0 WHERE requested_at=0 AND initial_seconds&lt;0</sql>
+ </changeSet>
+</databaseChangeLog>

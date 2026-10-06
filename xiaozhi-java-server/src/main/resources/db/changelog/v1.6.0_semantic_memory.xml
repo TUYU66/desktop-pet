@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="semantic-memory-history-v1" author="codex">
+  <comment>语义记忆独立历史；不改写或清洗既有记忆</comment>
+  <createTable tableName="user_memory_history">
+   <column name="id" type="bigint" autoIncrement="true"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="bigint"><constraints nullable="false"/></column>
+   <column name="role_id" type="varchar(50)"><constraints nullable="false"/></column>
+   <column name="memory_id" type="bigint"><constraints nullable="false"/></column>
+   <column name="old_json" type="text"/>
+   <column name="new_json" type="text"/>
+   <column name="reason" type="varchar(20)"><constraints nullable="false"/></column>
+   <column name="source" type="text"><constraints nullable="false"/></column>
+   <column name="turn_id" type="varchar(64)"><constraints nullable="false"/></column>
+   <column name="version" type="int"><constraints nullable="false"/></column>
+   <column name="changed_at" type="datetime"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="user_memory_history" indexName="idx_semantic_history_owner">
+   <column name="user_id"/><column name="role_id"/><column name="memory_id"/><column name="id"/>
+  </createIndex>
+ </changeSet>
+</databaseChangeLog>

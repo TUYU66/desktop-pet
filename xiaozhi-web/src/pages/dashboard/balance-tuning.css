@@ -1,0 +1,29 @@
+.balance-tuning { margin-top: 28px; border-top: 1px solid #e3ebf6; color: #344761; }
+.balance-tuning-toggle { display: flex; justify-content: space-between; width: 100%; padding: 20px 0 12px; border: 0; background: transparent; color: #315f9e; text-align: left; cursor: pointer; font: inherit; font-weight: 600; }
+.balance-tuning-toggle span:last-child { font-size: 13px; font-weight: 400; }
+.balance-tuning-toggle:focus-visible { outline: 2px solid #3867a6; outline-offset: 4px; }
+.balance-tuning-note { color: #6b7e97; font-size: 13px; line-height: 1.8; max-width: 80ch; }
+.balance-tuning-actions { margin: 10px 0 16px; }
+.balance-tuning-feedback { color: #315f9e; font-size: 13px; }
+.balance-parameter-scroll { overflow-x: auto; }
+.balance-parameters { border-collapse: collapse; width: 100%; min-width: 480px; margin: 8px 0 16px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.balance-parameters th, .balance-parameters td { border-bottom: 1px solid #e3ebf6; padding: 12px; text-align: left; }
+.balance-parameters thead { background: #f0f5fc; color: #4c607b; }
+.balance-parameters tbody th { font-weight: 500; }
+.balance-parameters .ant-input-number { width: 136px; }
+.balance-observation-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 26px; }
+.balance-observation-heading h4 { font-size: 15px; margin: 0; }
+.balance-observation-summary { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 18px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.balance-traces { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 28px; }
+.balance-trace { margin: 0; min-width: 0; padding: 14px 0; border-top: 1px solid #e3ebf6; }
+.balance-trace figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 13px; }
+.balance-trace figcaption span { color: #6b7e97; font-size: 12px; }
+.balance-trace svg { width: 100%; display: block; margin-top: 10px; }
+.balance-trace svg text { fill: #6b7e97; font-size: 11px; }
+.balance-trace-legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.balance-trace-legend i { display: inline-block; width: 12px; height: 3px; margin-right: 6px; vertical-align: middle; }
+@media(max-width:800px) { .balance-traces { grid-template-columns: 1fr; } }
+@media(max-width:650px) { .balance-observation-heading { align-items: flex-start; flex-direction: column; } .balance-parameters th, .balance-parameters td { padding: 10px 8px; } }
+.balance-gyro { padding: 14px 0 18px; margin: 16px 0; border-top: 1px solid #dce6f3; border-bottom: 1px solid #dce6f3; }
+.balance-gyro-values { display: flex; flex-wrap: wrap; gap: 12px 24px; margin: 12px 0; color: #526a8a; }
+.balance-gyro-values strong { color: #203d65; font-variant-numeric: tabular-nums; }

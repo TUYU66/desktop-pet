@@ -1,0 +1,356 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+
+    <changeSet id="1" author="xiaozhi">
+        <comment>用户表</comment>
+        <createTable tableName="sys_user" remarks="系统用户表">
+            <column name="id" type="bigint" autoIncrement="true" remarks="主键">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="username" type="varchar(50)" remarks="用户名">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="password" type="varchar(200)" remarks="密码(加密)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="email" type="varchar(100)" remarks="邮箱"/>
+            <column name="mobile" type="varchar(20)" remarks="手机号"/>
+            <column name="avatar" type="varchar(500)" remarks="头像URL"/>
+            <column name="nickname" type="varchar(100)" remarks="昵称"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态 1:正常 0:禁用"/>
+            <column name="super_admin" type="tinyint" defaultValue="0" remarks="是否超管 1:是 0:否"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="sys_user_token" remarks="用户令牌表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint" remarks="用户ID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="token" type="varchar(200)" remarks="令牌">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="expire_date" type="datetime" remarks="过期时间"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+        </createTable>
+
+        <createIndex tableName="sys_user_token" indexName="idx_token" unique="true">
+            <column name="token"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2" author="xiaozhi">
+        <comment>设备表</comment>
+        <createTable tableName="device" remarks="设备表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="mac_address" type="varchar(20)" remarks="MAC地址">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="uuid" type="varchar(50)" remarks="设备UUID"/>
+            <column name="device_model" type="varchar(100)" remarks="设备型号"/>
+            <column name="device_version" type="varchar(50)" remarks="固件版本"/>
+            <column name="status" type="varchar(20)" defaultValue="offline" remarks="在线状态 online/offline"/>
+            <column name="user_id" type="bigint" remarks="所属用户"/>
+            <column name="agent_id" type="bigint" remarks="绑定的智能体ID"/>
+            <column name="bind_code" type="varchar(10)" remarks="6位激活码"/>
+            <column name="bind_status" type="varchar(20)" defaultValue="unbound" remarks="绑定状态 unbound/bound"/>
+            <column name="last_online_time" type="datetime" remarks="最后在线时间"/>
+            <column name="extra_config" type="text" remarks="额外配置JSON"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createIndex tableName="device" indexName="idx_mac" unique="true">
+            <column name="mac_address"/>
+        </createIndex>
+        <createIndex tableName="device" indexName="idx_bind_code">
+            <column name="bind_code"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="3" author="xiaozhi">
+        <comment>智能体表</comment>
+        <createTable tableName="agent" remarks="智能体表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint" remarks="所属用户">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(100)" remarks="智能体名称">
+                <constraints nullable="false"/>
+            </column>
+            <column name="avatar" type="varchar(500)" remarks="头像"/>
+            <column name="description" type="varchar(500)" remarks="描述"/>
+            <column name="system_prompt" type="text" remarks="系统提示词"/>
+            <column name="exit_commands" type="varchar(500)" remarks="退出指令（逗号分隔）"/>
+            <column name="wakeup_words" type="varchar(500)" remarks="唤醒词（逗号分隔）"/>
+            <column name="voice_activity_time" type="int" defaultValue="3" remarks="语音活动检测超时(秒)"/>
+            <column name="listening_mode" type="varchar(20)" defaultValue="auto" remarks="聆听模式 auto/manual/realtime"/>
+            <column name="preferred_language" type="varchar(10)" defaultValue="zh-CN" remarks="首选语言"/>
+            <column name="llm_model_id" type="bigint" remarks="LLM模型ID"/>
+            <column name="tts_model_id" type="bigint" remarks="TTS模型ID"/>
+            <column name="asr_model_id" type="bigint" remarks="ASR模型ID"/>
+            <column name="vad_model_id" type="bigint" remarks="VAD模型ID"/>
+            <column name="memory_model_id" type="bigint" remarks="记忆模型ID"/>
+            <column name="intent_model_id" type="bigint" remarks="意图识别模型ID"/>
+            <column name="enable_greeting" type="tinyint" defaultValue="1" remarks="是否开启开场问候"/>
+            <column name="enable_voiceprint" type="tinyint" defaultValue="0" remarks="是否启出声纹识别"/>
+            <column name="extra_config" type="text" remarks="额外配置JSON"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="agent_chat_history" remarks="聊天记录表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="agent_id" type="bigint" remarks="智能体ID"/>
+            <column name="device_id" type="bigint" remarks="设备ID"/>
+            <column name="session_id" type="varchar(50)" remarks="WebSocket会话ID"/>
+            <column name="chat_type" type="varchar(20)" remarks="消息类型 user/assistant/system"/>
+            <column name="content" type="text" remarks="文本内容"/>
+            <column name="audio_data" type="longblob" remarks="音频数据（Opus编码）"/>
+            <column name="audio_format" type="varchar(10)" remarks="音频格式"/>
+            <column name="duration_ms" type="int" remarks="音频时长(毫秒)"/>
+            <column name="report_time" type="datetime" remarks="上报时间"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+        </createTable>
+
+        <createIndex tableName="agent_chat_history" indexName="idx_session" >
+            <column name="session_id"/>
+        </createIndex>
+
+        <createTable tableName="agent_chat_title" remarks="会话标题表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="agent_id" type="bigint" remarks="智能体ID"/>
+            <column name="session_id" type="varchar(50)" remarks="会话ID">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="title" type="varchar(200)" remarks="会话标题"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+        </createTable>
+
+        <createTable tableName="agent_voice_print" remarks="声纹表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="agent_id" type="bigint" remarks="智能体ID"/>
+            <column name="name" type="varchar(100)" remarks="声纹名称"/>
+            <column name="voice_data" type="longblob" remarks="声纹数据"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="agent_correct_word" remarks="纠错词表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="agent_id" type="bigint" remarks="智能体ID"/>
+            <column name="word" type="varchar(100)" remarks="原始词"/>
+            <column name="replacement" type="varchar(100)" remarks="替换词"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="4" author="xiaozhi">
+        <comment>模型配置表</comment>
+        <createTable tableName="model_provider" remarks="模型提供者表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(100)" remarks="提供者名称">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code" type="varchar(50)" remarks="提供者编码">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_type" type="varchar(20)" remarks="模型类型 llm/tts/asr/vad/memory/intent/vllm">
+                <constraints nullable="false"/>
+            </column>
+            <column name="api_base_url" type="varchar(500)" remarks="API基础URL"/>
+            <column name="api_key" type="varchar(500)" remarks="API密钥(加密)"/>
+            <column name="description" type="varchar(500)" remarks="描述"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态 1:启用 0:禁用"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="model_config" remarks="模型配置表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="provider_id" type="bigint" remarks="提供者ID"/>
+            <column name="model_name" type="varchar(100)" remarks="模型名称">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_code" type="varchar(50)" remarks="模型编码"/>
+            <column name="model_type" type="varchar(20)" remarks="模型类型">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_default" type="tinyint" defaultValue="0" remarks="是否默认 1:是 0:否"/>
+            <column name="extra_params" type="text" remarks="额外参数JSON"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="5" author="xiaozhi">
+        <comment>OTA表</comment>
+        <createTable tableName="ota_firmware" remarks="OTA固件表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="version" type="varchar(20)" remarks="版本号"/>
+            <column name="description" type="varchar(500)" remarks="更新描述"/>
+            <column name="file_path" type="varchar(500)" remarks="文件路径"/>
+            <column name="file_size" type="bigint" remarks="文件大小(字节)"/>
+            <column name="md5" type="varchar(50)" remarks="MD5校验值"/>
+            <column name="board_type" type="varchar(50)" remarks="适用开发板类型"/>
+            <column name="force_update" type="tinyint" defaultValue="0" remarks="是否强制更新"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态"/>
+            <column name="download_count" type="int" defaultValue="0" remarks="下载次数"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="ota_activation" remarks="激活记录表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="device_id" type="bigint" remarks="设备ID"/>
+            <column name="challenge" type="varchar(200)" remarks="挑战码"/>
+            <column name="hmac_response" type="varchar(200)" remarks="HMAC响应"/>
+            <column name="status" type="varchar(20)" defaultValue="pending" remarks="状态"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="6" author="xiaozhi">
+        <comment>知识库表</comment>
+        <createTable tableName="knowledge_base" remarks="知识库表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint" remarks="所属用户"/>
+            <column name="agent_id" type="bigint" remarks="关联智能体"/>
+            <column name="name" type="varchar(200)" remarks="知识库名称">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(500)" remarks="描述"/>
+            <column name="rag_model_id" type="bigint" remarks="RAG模型ID"/>
+            <column name="embedding_model" type="varchar(100)" remarks="嵌入模型名"/>
+            <column name="top_k" type="int" defaultValue="3" remarks="检索返回条数"/>
+            <column name="score_threshold" type="decimal(3,2)" defaultValue="0.50" remarks="相似度阈值"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="knowledge_document" remarks="知识库文档表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="kb_id" type="bigint" remarks="知识库ID"/>
+            <column name="filename" type="varchar(200)" remarks="文件名"/>
+            <column name="file_type" type="varchar(20)" remarks="文件类型 txt/pdf/md/docx"/>
+            <column name="file_size" type="bigint" remarks="文件大小"/>
+            <column name="file_path" type="varchar(500)" remarks="文件路径"/>
+            <column name="status" type="varchar(20)" defaultValue="uploaded" remarks="状态 uploaded/parsed/ready/error"/>
+            <column name="chunk_count" type="int" defaultValue="0" remarks="切片数量"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+        </createTable>
+
+        <createTable tableName="knowledge_chunk" remarks="知识库切片表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="doc_id" type="bigint" remarks="文档ID"/>
+            <column name="kb_id" type="bigint" remarks="知识库ID"/>
+            <column name="chunk_index" type="int" remarks="切片序号"/>
+            <column name="content" type="text" remarks="切片文本"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="7" author="xiaozhi">
+        <comment>系统管理表</comment>
+        <createTable tableName="sys_params" remarks="系统参数表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="param_name" type="varchar(100)" remarks="参数名">
+                <constraints nullable="false"/>
+            </column>
+            <column name="param_value" type="text" remarks="参数值"/>
+            <column name="param_type" type="tinyint" remarks="类型"/>
+            <column name="remark" type="varchar(500)" remarks="备注"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="sys_dict_type" remarks="字典类型表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dict_type" type="varchar(100)" remarks="字典类型">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="dict_name" type="varchar(100)" remarks="字典名称"/>
+            <column name="remark" type="varchar(500)" remarks="备注"/>
+            <column name="create_date" type="datetime"/>
+            <column name="update_date" type="datetime"/>
+            <column name="creator" type="bigint"/>
+            <column name="updater" type="bigint"/>
+        </createTable>
+
+        <createTable tableName="sys_dict_data" remarks="字典数据表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dict_type_id" type="bigint" remarks="字典类型ID"/>
+            <column name="dict_label" type="varchar(100)" remarks="字典标签"/>
+            <column name="dict_value" type="varchar(100)" remarks="字典值"/>
+            <column name="sort" type="int" defaultValue="0" remarks="排序"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态"/>
+            <column name="remark" type="varchar(500)" remarks="备注"/>
+            <column name="create_date" type="datetime"/>
+            <column name="update_date" type="datetime"/>
+            <column name="creator" type="bigint"/>
+            <column name="updater" type="bigint"/>
+        </createTable>
+    </changeSet>
+
+</databaseChangeLog>

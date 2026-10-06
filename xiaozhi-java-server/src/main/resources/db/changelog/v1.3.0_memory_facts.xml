@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="27-memory-facts" author="codex">
+  <comment>增量事实结构；旧正文保持原样，不猜测历史数据的对象与时间</comment>
+  <addColumn tableName="user_memory">
+   <column name="fact_json" type="text"/>
+   <column name="fact_key" type="varchar(64)"/>
+   <column name="slot_key" type="varchar(64)"/>
+   <column name="content_hash" type="varchar(64)"/>
+   <column name="source_turn_id" type="varchar(64)"/>
+   <column name="version" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+  </addColumn>
+  <createIndex tableName="user_memory" indexName="idx_memory_fact_key"><column name="user_id"/><column name="role_id"/><column name="fact_key"/></createIndex>
+  <addUniqueConstraint tableName="user_memory" columnNames="user_id,role_id,slot_key" constraintName="uk_memory_fact_slot"/>
+  <createTable tableName="user_memory_scope">
+   <column name="user_id" type="bigint"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_memory_scope"/></column>
+   <column name="role_id" type="varchar(50)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_memory_scope"/></column>
+   <column name="revision" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+  </createTable>
+  <createTable tableName="user_memory_turn">
+   <column name="user_id" type="bigint"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_memory_turn"/></column>
+   <column name="role_id" type="varchar(50)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_memory_turn"/></column>
+   <column name="turn_id" type="varchar(64)"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_memory_turn"/></column>
+   <column name="result_json" type="text"><constraints nullable="false"/></column>
+   <column name="create_date" type="datetime"/>
+  </createTable>
+ </changeSet>
+</databaseChangeLog>

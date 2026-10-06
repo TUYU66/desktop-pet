@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260930-reminder-scheduled-at" author="codex">
+  <comment>Keep user-arranged time independent of occurrence identity and automatic retry time. Preserve all todos and reminder states.</comment>
+  <addColumn tableName="user_reminder">
+   <column name="scheduled_at" type="BIGINT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+  </addColumn>
+  <sql><![CDATA[
+   UPDATE user_reminder SET scheduled_at=CASE
+    WHEN plan_id IS NOT NULL AND requested_at>0 AND requested_at<>original_due_at THEN requested_at
+    WHEN status='scheduled' AND delivery_count=0 THEN due_at
+    WHEN original_due_at>0 THEN original_due_at
+    WHEN requested_at>0 THEN requested_at ELSE due_at END;
+  ]]></sql>
+ </changeSet>
+</databaseChangeLog>

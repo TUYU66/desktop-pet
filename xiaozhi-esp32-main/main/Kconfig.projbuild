@@ -1,0 +1,108 @@
+menu "Xiaozhi Assistant"
+
+config USE_DYNAMIC_WAKE_WORD
+    bool "Runtime configurable Chinese wake phrase"
+    depends on IDF_TARGET_ESP32S3 && SR_MN_CN_MULTINET6_QUANT
+    default y
+    help
+        Adds a configurable MultiNet6 phrase while keeping WakeNet active.
+        Requires mn6_cn in the assets partition. Configuration is saved in NVS.
+
+config USE_ROBO_EYES
+    bool "Animated robot eyes on LCD"
+    depends on !USE_WECHAT_MESSAGE_STYLE
+    default y
+    help
+        黑底蓝色动态双眼，保留底部字幕。关闭后恢复原有表情显示。
+
+config USE_ROBO_MOUTH
+    bool "Add an animated mouth to robot eyes"
+    depends on USE_ROBO_EYES
+    default y
+    help
+        增加随情绪变化的小嘴，说话状态下轻轻开合。关闭后恢复双眼版本。
+
+config OTA_URL
+    string "Default OTA URL"
+    default "http://192.168.123.172:8000/xiaozhi/ota/"
+    help
+        固件通过该地址检查升级，并取得 WebSocket 服务地址。
+
+config WEBSOCKET_STANDBY_CONNECTION
+    bool "Keep WebSocket available during standby"
+    default y
+    help
+        待命时保留控制连接，以便接收网页消息与提醒。
+
+# 当前固件只保留 ESP-SR AFE 音频处理与唤醒词实现。
+# 这两个隐藏选项同时供资源打包脚本判断是否需要写入唤醒词模型。
+config USE_AUDIO_PROCESSOR
+    bool
+    default y
+
+config USE_AFE_WAKE_WORD
+    bool
+    default y
+
+choice
+    prompt "Flash Assets"
+    default FLASH_DEFAULT_ASSETS
+
+    config FLASH_NONE_ASSETS
+        bool "Do not flash assets"
+
+    config FLASH_DEFAULT_ASSETS
+        bool "Flash default assets"
+
+    config FLASH_CUSTOM_ASSETS
+        bool "Flash custom assets"
+endchoice
+
+config CUSTOM_ASSETS_FILE
+    depends on FLASH_CUSTOM_ASSETS
+    string "Custom Assets File"
+    default "assets.bin"
+
+choice DISPLAY_STYLE
+    prompt "Chat message style"
+    default USE_DEFAULT_MESSAGE_STYLE
+
+    config USE_DEFAULT_MESSAGE_STYLE
+        bool "Default style"
+
+    config USE_WECHAT_MESSAGE_STYLE
+        bool "WeChat style"
+endchoice
+
+config USE_MULTILINE_CHAT_MESSAGE
+    bool "Use multiline chat messages"
+    default n
+
+choice AUDIO_ECHO_CANCELLATION
+    prompt "Echo cancellation mode"
+    default USE_DEVICE_AEC if IDF_TARGET_ESP32S3
+    default AEC_DISABLED
+
+    config AEC_DISABLED
+        bool "Disabled"
+
+    config USE_DEVICE_AEC
+        bool "Device-side AEC"
+
+    config USE_SERVER_AEC
+        bool "Server-side AEC"
+endchoice
+
+config SEND_WAKE_WORD_DATA
+    bool "Send wake-word audio to server"
+    default y
+
+config WAKE_WORD_DETECTION_IN_LISTENING
+    bool "Keep wake-word detection while listening"
+    default n
+
+config RECEIVE_CUSTOM_MESSAGE
+    bool "Receive custom server messages"
+    default n
+
+endmenu

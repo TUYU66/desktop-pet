@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260914-schedules" author="codex">
+  <!-- 仅兼容曾发布过的含requested_at版本；原始迁移内容保持不变，新字段由后续迁移补齐。 -->
+  <validCheckSum>9:740345d6103d87ef2850d540e9231e4e</validCheckSum>
+  <addColumn tableName="user_reminder">
+   <column name="plan_id" type="varchar(36)"/>
+   <column name="delivery_count" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="ack_deadline" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+  </addColumn>
+  <createTable tableName="reminder_plan">
+   <column name="id" type="varchar(36)"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="bigint"><constraints nullable="false"/></column>
+   <column name="device_id" type="varchar(64)"><constraints nullable="false"/></column>
+   <column name="title" type="varchar(120)"><constraints nullable="false"/></column>
+   <column name="recurrence" type="varchar(20)"><constraints nullable="false"/></column>
+   <column name="initial_at" type="bigint"><constraints nullable="false"/></column>
+   <column name="next_at" type="bigint"><constraints nullable="false"/></column>
+   <column name="status" type="varchar(20)" defaultValue="active"><constraints nullable="false"/></column>
+   <column name="version" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="created_at" type="bigint"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="reminder_plan" indexName="idx_plan_due"><column name="status"/><column name="next_at"/></createIndex>
+ </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+    <changeSet id="1.8.1-chat-history-cursor-index" author="desktop-pet">
+        <createIndex tableName="agent_chat_history" indexName="idx_chat_session_date_id">
+            <column name="session_id"/><column name="create_date"/><column name="id"/>
+        </createIndex>
+        <rollback><dropIndex tableName="agent_chat_history" indexName="idx_chat_session_date_id"/></rollback>
+    </changeSet>
+</databaseChangeLog>

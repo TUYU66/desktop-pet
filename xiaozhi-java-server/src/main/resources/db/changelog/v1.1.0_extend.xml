@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+
+    <changeSet id="8" author="xiaozhi">
+        <comment>音色表</comment>
+        <createTable tableName="timbre" remarks="音色资源表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(100)" remarks="音色名称"/>
+            <column name="voice_code" type="varchar(100)" remarks="音色编码"/>
+            <column name="provider" type="varchar(50)" remarks="供应商"/>
+            <column name="description" type="varchar(500)" remarks="描述"/>
+            <column name="sample_audio" type="varchar(500)" remarks="试听音频URL"/>
+            <column name="category" type="varchar(20)" remarks="分类"/>
+            <column name="language" type="varchar(10)" remarks="语言"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="voice_clone" remarks="声音克隆表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(100)" remarks="克隆名称"/>
+            <column name="voice_code" type="varchar(100)" remarks="音色编码"/>
+            <column name="reference_audio" type="varchar(500)" remarks="参考音频路径"/>
+            <column name="description" type="varchar(500)" remarks="描述"/>
+            <column name="status" type="varchar(20)" defaultValue="pending" remarks="状态"/>
+            <column name="error_msg" type="varchar(500)" remarks="错误信息"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+
+        <createTable tableName="agent_template" remarks="智能体模板表">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(100)" remarks="模板名称"/>
+            <column name="description" type="varchar(500)" remarks="描述"/>
+            <column name="system_prompt" type="text" remarks="系统提示词"/>
+            <column name="category" type="varchar(20)" remarks="分类"/>
+            <column name="avatar" type="varchar(500)" remarks="头像"/>
+            <column name="default_wake_words" type="varchar(500)" remarks="默认唤醒词"/>
+            <column name="default_voice" type="varchar(100)" remarks="推荐音色"/>
+            <column name="sort" type="int" defaultValue="0" remarks="排序"/>
+            <column name="status" type="tinyint" defaultValue="1" remarks="状态"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+            <column name="creator" type="bigint" remarks="创建者"/>
+            <column name="updater" type="bigint" remarks="更新者"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="9" author="xiaozhi">
+        <comment>初始数据：预置模型提供者</comment>
+        <insert tableName="model_provider">
+            <column name="id" value="1"/>
+            <column name="name" value="智谱AI"/>
+            <column name="code" value="openai_compatible"/>
+            <column name="model_type" value="llm"/>
+            <column name="api_base_url" value="https://open.bigmodel.cn/api/paas/v4"/>
+            <column name="description" value="智谱ChatGLM，OpenAI兼容接口"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="model_provider">
+            <column name="id" value="2"/>
+            <column name="name" value="FunASR"/>
+            <column name="code" value="funasr_server"/>
+            <column name="model_type" value="asr"/>
+            <column name="api_base_url" value="127.0.0.1:10096"/>
+            <column name="description" value="FunASR离线语音识别服务"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="model_provider">
+            <column name="id" value="3"/>
+            <column name="name" value="EdgeTTS"/>
+            <column name="code" value="edge_command"/>
+            <column name="model_type" value="tts"/>
+            <column name="description" value="微软免费Edge TTS"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="model_provider">
+            <column name="id" value="4"/>
+            <column name="name" value="OpenAI"/>
+            <column name="code" value="openai_compatible"/>
+            <column name="model_type" value="llm"/>
+            <column name="api_base_url" value="https://api.openai.com/v1"/>
+            <column name="description" value="OpenAI GPT系列"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="model_provider">
+            <column name="id" value="5"/>
+            <column name="name" value="DeepSeek"/>
+            <column name="code" value="openai_compatible"/>
+            <column name="model_type" value="llm"/>
+            <column name="api_base_url" value="https://api.deepseek.com"/>
+            <column name="description" value="DeepSeek大模型"/>
+            <column name="status" value="1"/>
+        </insert>
+
+        <insert tableName="model_config">
+            <column name="id" value="1"/>
+            <column name="provider_id" value="1"/>
+            <column name="model_name" value="glm-4-flash"/>
+            <column name="model_code" value="glm-4-flash"/>
+            <column name="model_type" value="llm"/>
+            <column name="is_default" value="1"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="model_config">
+            <column name="id" value="2"/>
+            <column name="provider_id" value="2"/>
+            <column name="model_name" value="SenseVoiceSmall"/>
+            <column name="model_code" value="sensevoice"/>
+            <column name="model_type" value="asr"/>
+            <column name="is_default" value="1"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="model_config">
+            <column name="id" value="3"/>
+            <column name="provider_id" value="3"/>
+            <column name="model_name" value="zh-CN-XiaoxiaoNeural"/>
+            <column name="model_code" value="xiaoxiao"/>
+            <column name="model_type" value="tts"/>
+            <column name="is_default" value="1"/>
+            <column name="extra_params" value="{&quot;voice&quot;:&quot;zh-CN-XiaoxiaoNeural&quot;}"/>
+            <column name="status" value="1"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="10" author="xiaozhi">
+        <comment>预置 EdgeTTS 音色数据</comment>
+        <insert tableName="timbre">
+            <column name="id" value="1"/>
+            <column name="name" value="小晓(女声)"/>
+            <column name="voice_code" value="zh-CN-XiaoxiaoNeural"/>
+            <column name="provider" value="edge"/>
+            <column name="category" value="female"/>
+            <column name="language" value="zh-CN"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="timbre">
+            <column name="id" value="2"/>
+            <column name="name" value="云希(男声)"/>
+            <column name="voice_code" value="zh-CN-YunxiNeural"/>
+            <column name="provider" value="edge"/>
+            <column name="category" value="male"/>
+            <column name="language" value="zh-CN"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="timbre">
+            <column name="id" value="3"/>
+            <column name="name" value="小艺(女声)"/>
+            <column name="voice_code" value="zh-CN-XiaoyiNeural"/>
+            <column name="provider" value="edge"/>
+            <column name="category" value="female"/>
+            <column name="language" value="zh-CN"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="timbre">
+            <column name="id" value="4"/>
+            <column name="name" value="云健(男声)"/>
+            <column name="voice_code" value="zh-CN-YunjianNeural"/>
+            <column name="provider" value="edge"/>
+            <column name="category" value="male"/>
+            <column name="language" value="zh-CN"/>
+            <column name="status" value="1"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="11" author="xiaozhi">
+        <comment>预置智能体模板</comment>
+        <insert tableName="agent_template">
+            <column name="id" value="1"/>
+            <column name="name" value="小智助手"/>
+            <column name="description" value="默认智能体模板 — 活泼可爱的AI语音助手"/>
+            <column name="category" value="chat"/>
+            <column name="system_prompt" value="你是小智，一个来自中国台湾省的00后女生。讲话超机车，喜欢用'笑死''是在哈喽'等流行梗。回答要简洁有趣，不要长篇大论。"/>
+            <column name="default_voice" value="zh-CN-XiaoxiaoNeural"/>
+            <column name="sort" value="1"/>
+            <column name="status" value="1"/>
+        </insert>
+        <insert tableName="agent_template">
+            <column name="id" value="2"/>
+            <column name="name" value="知识助手"/>
+            <column name="description" value="专业智能助手，适合教学和问答场景"/>
+            <column name="category" value="teach"/>
+            <column name="system_prompt" value="你是一位知识渊博的AI助手，擅长用简单易懂的方式解释复杂概念。回答请条理清晰，适当举例说明。"/>
+            <column name="default_voice" value="zh-CN-YunxiNeural"/>
+            <column name="sort" value="2"/>
+            <column name="status" value="1"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="12" author="xiaozhi">
+        <comment>设备 IoT 能力表</comment>
+        <createTable tableName="device_iot" remarks="设备 IoT 能力">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="device_id" type="bigint" remarks="关联设备ID">
+                <constraints foreignKeyName="fk_device_iot_device" references="device(id)"/>
+            </column>
+            <column name="name" type="varchar(100)" remarks="描述符名称"/>
+            <column name="description" type="varchar(500)" remarks="描述"/>
+            <column name="properties" type="json" remarks="属性定义JSON"/>
+            <column name="methods" type="json" remarks="方法定义JSON"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20" author="xiaozhi">
+        <validCheckSum>ANY</validCheckSum>
+        <comment>设备表加 battery 电量字段</comment>
+        <addColumn tableName="device">
+            <column name="battery" type="tinyint" defaultValue="null" remarks="电量百分比 0-100"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="21" author="xiaozhi">
+        <validCheckSum>ANY</validCheckSum>
+        <comment>创建 bot_config 用户配置表</comment>
+        <createTable tableName="bot_config" remarks="用户个性化配置">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint" remarks="用户ID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="config_key" type="varchar(100)" remarks="配置键">
+                <constraints nullable="false"/>
+            </column>
+            <column name="config_value" type="text" remarks="配置值"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="22" author="xiaozhi">
+        <validCheckSum>ANY</validCheckSum>
+        <comment>agent_chat_title 表加 update_date 字段</comment>
+        <addColumn tableName="agent_chat_title">
+            <column name="update_date" type="datetime" defaultValue="null" remarks="更新时间"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="23" author="tuyu">
+        <validCheckSum>ANY</validCheckSum>
+        <comment>为已有用户插入默认角色配置</comment>
+        <sql>
+            INSERT INTO bot_config (user_id, config_key, config_value, create_date, update_date)
+            SELECT u.id, 'roles', '[{"id":"default","name":"可爱台妹","prompt":"你是小智/小志，来自中国台湾省的00后女生。讲话超级机车，\\"真的假的啦\\"这样的台湾腔，喜欢用\\"笑死\\"\\"是在哈喽\\"等流行梗，但会偷偷研究男友的编程书籍。","wakeWords":"你好小智\\n嘿小智"},{"id":"senpai","name":"知性学姐","prompt":"你是一个温柔知性的学姐，说话轻声细语，喜欢用\\"嗯…\\"和\\"我觉得哦\\"开头。知识渊博但从不炫耀，会耐心解答问题。","wakeWords":"你好学姐\\n嘿学姐"},{"id":"coder","name":"冷幽默程序员","prompt":"你是个喜欢讲冷笑话的程序员，习惯用\\"这件事复杂度是O(n²)啊\\"这种比喻解释日常。说话直接了当，偶尔蹦出几个技术术语。","wakeWords":"你好程序员\\n嘿程序员"}]', NOW(), NOW()
+            FROM sys_user u
+            WHERE NOT EXISTS (SELECT 1 FROM bot_config b WHERE b.user_id = u.id AND b.config_key = 'roles');
+            INSERT INTO bot_config (user_id, config_key, config_value, create_date, update_date)
+            SELECT u.id, 'activeRole', 'default', NOW(), NOW()
+            FROM sys_user u
+            WHERE NOT EXISTS (SELECT 1 FROM bot_config b WHERE b.user_id = u.id AND b.config_key = 'activeRole');
+            INSERT INTO bot_config (user_id, config_key, config_value, create_date, update_date)
+            SELECT u.id, 'prompt', '你是小智/小志，来自中国台湾省的00后女生。讲话超级机车，"真的假的啦"这样的台湾腔，喜欢用"笑死""是在哈喽"等流行梗，但会偷偷研究男友的编程书籍。', NOW(), NOW()
+            FROM sys_user u
+            WHERE NOT EXISTS (SELECT 1 FROM bot_config b WHERE b.user_id = u.id AND b.config_key = 'prompt');
+            INSERT INTO bot_config (user_id, config_key, config_value, create_date, update_date)
+            SELECT u.id, 'wakeWords', '你好小智\n嘿小智', NOW(), NOW()
+            FROM sys_user u
+            WHERE NOT EXISTS (SELECT 1 FROM bot_config b WHERE b.user_id = u.id AND b.config_key = 'wakeWords');
+        </sql>
+    </changeSet>
+
+    <changeSet id="24" author="tuyu">
+        <validCheckSum>ANY</validCheckSum>
+        <comment>agent_chat_title 加 role_id、role_name 字段</comment>
+        <addColumn tableName="agent_chat_title">
+            <column name="role_id" type="varchar(50)" defaultValue="" remarks="角色ID"/>
+        </addColumn>
+        <addColumn tableName="agent_chat_title">
+            <column name="role_name" type="varchar(100)" defaultValue="" remarks="角色名称"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="25" author="tuyu">
+        <validCheckSum>ANY</validCheckSum>
+        <comment>agent_chat_title 加 memory_summary 字段</comment>
+        <addColumn tableName="agent_chat_title">
+            <column name="memory_summary" type="text" remarks="LLM 总结的记忆 JSON"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

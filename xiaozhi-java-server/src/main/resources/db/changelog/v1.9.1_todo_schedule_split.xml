@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260929-todo-schedule-split" author="codex">
+  <comment>Separate existing notifications from todos without resending or changing acknowledgement state. Keep internal tombstones and operation receipts.</comment>
+  <sql><![CDATA[
+   UPDATE reminder_plan SET initial_at=initial_at+remind_offset,next_at=next_at+remind_offset,task_enabled=false,task_date_enabled=false,deadline_offset=NULL,remind_offset=NULL,version=version+1 WHERE task_enabled=true AND remind_offset IS NOT NULL;
+   UPDATE reminder_plan SET status='cancelled',task_enabled=false,version=version+1 WHERE task_enabled=true;
+   UPDATE user_todo t SET t.deleted=true WHERE EXISTS (SELECT 1 FROM user_reminder r WHERE r.task_id=t.id);
+   UPDATE user_reminder SET task_id=NULL WHERE task_id IS NOT NULL;
+   UPDATE user_todo SET remind_at=NULL,reminder_id=NULL,device_id=NULL,plan_id=NULL,occurrence_at=NULL WHERE deleted=false;
+   UPDATE user_todo SET task_date=COALESCE(task_date,DATE_FORMAT(UTC_TIMESTAMP()+INTERVAL 8 HOUR,'%Y-%m-%d')),deadline_at=CASE WHEN deadline_at IS NULL THEN (FLOOR((UNIX_TIMESTAMP()*1000+28800000)/86400000)+8)*86400000-28800000 ELSE CEIL((deadline_at+28800000)/86400000)*86400000-28800000 END WHERE deleted=false;
+  ]]></sql>
+ </changeSet>
+</databaseChangeLog>

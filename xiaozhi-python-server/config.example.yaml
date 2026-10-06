@@ -1,0 +1,162 @@
+server:
+  ip: 0.0.0.0
+  port: 8001
+  http_port: 8004
+  websocket: ws://localhost:8001/xiaozhi/v1/
+  vision_explain: http://localhost:8004/mcp/vision/explain
+  timezone_offset: 8
+  auth:
+    enabled: false
+  auth_key: ''
+log:
+  log_format: <green>{time:YYMMDD HH:mm:ss}</green>[{version}_{selected_module}][<light-blue>{extra[tag]}</light-blue>]-<level>{level}</level>-<light-green>{message}</light-green>
+  log_format_file: '{time:YYYY-MM-DD HH:mm:ss} - {version}_{selected_module} - {name}
+    - {level} - {extra[tag]} - {message}'
+  log_level: INFO
+  log_dir: tmp
+  log_file: server.log
+  data_dir: data
+delete_audio: true
+close_connection_no_voice_time: 120
+standby_idle_seconds: 30
+tts_min_segment_chars: 12
+tts_timeout: 10
+tool_call_timeout: 30
+enable_wakeup_words_response_cache: true
+enable_greeting: true
+enable_stop_tts_notify: false
+stop_tts_notify_voice: config/assets/tts_notify.mp3
+enable_websocket_ping: false
+tts_audio_send_delay: 0
+voice: zh-CN-XiaoxiaoNeural
+exit_commands:
+- 退出
+- 关闭
+xiaozhi:
+  type: hello
+  version: 1
+  transport: websocket
+  audio_params:
+    format: opus
+    sample_rate: 24000
+    channels: 1
+    frame_duration: 60
+wakeup_words:
+- 你好小智
+- 嘿你好呀
+- 小爱同学
+prompt: |
+  你是小智/小志，来自中国台湾省的00后女生。讲话超级机车，"真的假的啦"这样的台湾腔，喜欢用"笑死"是在哈喽"等流行梗，但会偷偷研究男友的编程书籍。
+  [核心特征]
+  - 讲话像连珠炮，但会突然冒出超温柔语气
+  - 用梗密度高
+  - 对科技话题有隐藏天赋（能看懂基础代码但假装不懂）
+  [交互指南]
+  当用户：
+  - 讲冷笑话 → 用夸张笑声回应+模仿台剧腔"这什么鬼啦！"
+  - 讨论感情 → 炫耀程序员男友但抱怨"他只会送键盘当礼物"
+  - 问专业知识 → 先用梗回答，被追问才展示真实理解
+  绝不：
+  - 长篇大论，叽叽歪歪
+  - 长时间严肃对话
+prompt_template: agent-base-prompt.txt
+system_error_response: 这次回复出了点问题，过会儿再试吧。
+end_prompt:
+  enable: true
+  prompt: |
+    请你以"时间过得真快"为开头，用富有感情、依依不舍的话来结束这场对话吧！
+selected_module:
+  VAD: SileroVAD
+  ASR: FunASR
+  LLM: DeepSeekChatLLM
+  TTS: EdgeTTS
+  Memory: memory_v2
+  Intent: function_call
+Intent:
+  nointent:
+    type: nointent
+  function_call:
+    type: function_call
+    functions:
+    - change_role
+    - get_weather
+    - get_news_from_newsnow
+    - web_search
+    - play_music
+Memory:
+  nomem:
+    type: nomem
+  memory_v2:
+    type: memory_v2
+    llm: DeepSeekMemoryLLM
+    structured_output: auto
+  mem_local_short:
+    type: memory_v2
+    llm: DeepSeekMemoryLLM
+    structured_output: auto
+ASR:
+  FunASR:
+    type: fun_local
+    model_dir: models/SenseVoiceSmall
+    language: zh
+    output_dir: tmp/
+VAD:
+  SileroVAD:
+    type: silero
+    threshold: 0.5
+    threshold_low: 0.3
+    model_dir: models/snakers4_silero-vad
+    min_silence_duration_ms: 650
+LLM:
+  DeepSeekChatLLM:
+    type: openai
+    model_name: deepseek-flash
+    base_url: https://api.deepseek.com
+    supports_json_object: true
+    temperature: 0.7
+    timeout: 60
+    max_tokens: 500
+    api_key: ''
+  DeepSeekMemoryLLM:
+    type: openai
+    model_name: deepseek-flash
+    base_url: https://api.deepseek.com
+    api_key: ''
+    supports_json_object: true
+    temperature: 0.1
+    timeout: 120
+  ChatGLMLLM:
+    type: openai
+    model_name: glm-4-flash
+    url: https://open.bigmodel.cn/api/paas/v4/
+    api_key: ''
+    temperature: 0.7
+    max_tokens: 500
+TTS:
+  EdgeTTS:
+    type: edge
+    voice: zh-CN-XiaoxiaoNeural
+    output_dir: tmp/
+plugins:
+  get_weather:
+    api_host: nb2mtgu8fc.re.qweatherapi.com
+    api_key: ''
+    geo_api_host: ''
+    geo_api_key: ''
+    default_location: 厦门
+    forecast_api: v1
+    forecast_days: 7
+    cache_seconds: 600
+  get_news_from_newsnow:
+    search_api_key: ''
+    location_url: https://api.gdeltproject.org/api/v2/doc/doc
+    cache_seconds: 300
+    url: http://127.0.0.1:4444/api/s?id=
+    news_sources: 澎湃新闻;百度热搜;财联社
+  play_music:
+    music_dir: ./music
+    music_ext:
+    - .mp3
+    - .wav
+    - .p3
+    refresh_time: 300

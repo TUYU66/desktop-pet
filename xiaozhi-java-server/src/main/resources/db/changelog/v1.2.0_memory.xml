@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+
+    <changeSet id="26" author="codex">
+        <comment>新增按用户和角色持久化的长期记忆表</comment>
+        <createTable tableName="user_memory" remarks="用户长期记忆">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="bigint" remarks="用户ID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="role_id" type="varchar(50)" defaultValue="default" remarks="角色ID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="category" type="varchar(50)" defaultValue="note" remarks="记忆分类">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content" type="text" remarks="记忆内容">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_type" type="varchar(20)" defaultValue="manual" remarks="来源 manual/conversation"/>
+            <column name="source_session_id" type="varchar(50)" remarks="来源会话ID"/>
+            <column name="create_date" type="datetime" remarks="创建时间"/>
+            <column name="update_date" type="datetime" remarks="更新时间"/>
+        </createTable>
+        <createIndex tableName="user_memory" indexName="idx_user_memory_role">
+            <column name="user_id"/>
+            <column name="role_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

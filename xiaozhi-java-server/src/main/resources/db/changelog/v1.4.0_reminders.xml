@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260914-reminders" author="codex">
+  <createTable tableName="user_reminder">
+   <column name="id" type="varchar(36)"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="bigint"><constraints nullable="false"/></column>
+   <column name="device_id" type="varchar(64)"><constraints nullable="false"/></column>
+   <column name="title" type="varchar(120)"><constraints nullable="false"/></column>
+   <column name="initial_seconds" type="bigint"><constraints nullable="false"/></column>
+   <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+   <column name="due_at" type="bigint"><constraints nullable="false"/></column>
+   <column name="next_attempt_at" type="bigint"><constraints nullable="false"/></column>
+   <column name="expires_at" type="bigint"><constraints nullable="false"/></column>
+   <column name="version" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="attempt_id" type="varchar(36)"/>
+   <column name="last_error" type="varchar(160)"/>
+   <column name="created_at" type="bigint"><constraints nullable="false"/></column>
+   <column name="updated_at" type="bigint"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="user_reminder" indexName="idx_reminder_due"><column name="status"/><column name="next_attempt_at"/></createIndex>
+  <createIndex tableName="user_reminder" indexName="idx_reminder_owner"><column name="user_id"/><column name="updated_at"/></createIndex>
+ </changeSet>
+</databaseChangeLog>

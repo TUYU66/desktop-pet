@@ -1,0 +1,8 @@
+{
+  "name": "xiaozhi-netease-bridge",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Private stdio bridge used by the Xiaozhi Python server",
+  "engines": { "node": ">=22" },
+  "dependencies": { "@neteasecloudmusicapienhanced/api": "4.40.1" }
+}

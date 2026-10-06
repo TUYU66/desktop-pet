@@ -1,0 +1,8 @@
+.memory-filters { display: grid; grid-template-columns: minmax(180px, 1fr) 150px 150px; gap: 12px; margin: 20px 0 8px; }
+.memory-loading { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #64748b; font-size: 13px; }
+.memory-row-category { display: inline-block; margin-bottom: 6px; padding: 2px 8px; border-radius: 6px; background: #eef4fd; color: #4d6590; font-size: 12px; }
+.memory-page > .ant-alert { margin-bottom: 16px; }
+@media (max-width: 650px) {
+  .memory-filters { grid-template-columns: 1fr 1fr; }
+  .memory-filters > .ant-input-search { grid-column: 1 / -1; }
+}

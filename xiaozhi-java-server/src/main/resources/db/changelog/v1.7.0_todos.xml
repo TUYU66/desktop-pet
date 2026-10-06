@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260922-todos" author="codex">
+  <createTable tableName="user_todo">
+   <column name="id" type="varchar(36)"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="bigint"><constraints nullable="false"/></column>
+   <column name="title" type="varchar(120)"><constraints nullable="false"/></column>
+   <column name="task_date" type="date"/>
+   <column name="device_id" type="varchar(120)"/>
+   <column name="reminder_id" type="varchar(36)"/>
+   <column name="remind_at" type="bigint"/>
+   <column name="status" type="varchar(16)" defaultValue="open"><constraints nullable="false"/></column>
+   <column name="version" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+   <column name="request_body" type="varchar(1000)"><constraints nullable="false"/></column>
+   <column name="created_at" type="bigint"><constraints nullable="false"/></column>
+   <column name="updated_at" type="bigint"><constraints nullable="false"/></column>
+  </createTable>
+  <createIndex tableName="user_todo" indexName="idx_todo_owner_date"><column name="user_id"/><column name="task_date"/><column name="status"/></createIndex>
+ </changeSet>
+</databaseChangeLog>

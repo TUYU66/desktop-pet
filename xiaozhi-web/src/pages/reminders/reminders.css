@@ -1,0 +1,153 @@
+.reminder-workspace { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 24px; margin-top: 24px; }
+.reminder-workspace > .surface { min-width: 0; width: 100%; box-sizing: border-box; }
+.reminder-queue, .reminder-plans { position: relative; overflow: hidden; }
+.reminder-queue { border-top: 3px solid #a8c7ef; background: #fff; }
+.reminder-plans { border-top: 3px solid #b3dbcb; background: linear-gradient(150deg, #f1faf6, #fff 40%); }
+.reminder-plans .section-heading h2 { color: #35755e; }
+.reminder-plans .section-heading > span, .reminder-queue .section-heading > span { padding: 3px 10px; background: #eef4fb; border-radius: 20px; font-size: 12px; }
+.reminder-plans .section-heading > span { background: #e6f4ed; color: #35755e; }
+.reminder-create { background: #fff; }
+.reminder-create h2 { margin-bottom: 24px; color: #3867a6; }
+.reminder-duration { display: grid; grid-template-columns: 1fr 110px; gap: 12px; }
+.reminder-duration .ant-input-number { width: 100%; }
+.reminder-row { border-top: 1px solid #dde4ee; padding: 20px 0; }
+.reminder-row-heading { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.reminder-row-heading h3 { font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+.reminder-time { font-size: 22px; font-variant-numeric: tabular-nums; color: #3867a6; margin: 10px 0 2px; }
+.reminder-meta, .reminder-help { font-size: 12px; color: #56677e; overflow-wrap: anywhere; }
+.reminder-help { border-top: 1px solid #dde4ee; padding-top: 16px; margin-top: 20px; }
+.reminder-reason { font-size: 13px; color: #895719; margin-top: 8px; }
+.reminder-actions { margin-top: 12px; }
+.reminder-queue-heading { gap: 12px; margin-bottom: 0; }
+.reminder-queue-heading h2 { margin: 0; color: #3867a6; }
+.reminder-queue-heading > span { flex-shrink: 0; color: #3867a6; }
+.reminder-queue-list { display: grid; gap: 12px; margin-top: 20px; }
+.active-reminder { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(160px, 220px); align-items: start; gap: 22px; padding: 20px; border: 1px solid #dce6f2; border-left: 3px solid #98b8de; border-radius: 12px; background: #f8fbff; }
+.active-reminder.needs-response { border-color: #ecd8b6; border-left-color: #bd8a35; background: #fffbf3; }
+.active-reminder-time { display: grid; gap: 7px; padding-right: 16px; border-right: 1px solid #dce6f2; color: #3867a6; font-variant-numeric: tabular-nums; }
+.active-reminder-time > span { font-size: 11px; color: #56677e; }
+.active-reminder-time time { display: grid; gap: 4px; }
+.active-reminder-time strong { font-size: 26px; font-weight: 600; line-height: 1.2; letter-spacing: -.5px; }
+.active-reminder-time time > span { font-size: 12px; color: #56677e; }
+.needs-response .active-reminder-time { color: #946016; border-color: #ecd8b6; }
+.active-reminder-content { min-width: 0; }
+.active-reminder-heading { display: flex; align-items: start; flex-wrap: wrap; gap: 8px 12px; }
+.active-reminder-heading h3 { flex: 1; min-width: 120px; margin: 0; color: #25354b; font-size: 16px; line-height: 1.6; font-weight: 600; text-wrap: wrap; overflow-wrap: anywhere; }
+.active-reminder-heading .ant-tag { flex-shrink: 0; margin: 2px 0 0; }
+.active-reminder-kind { margin: 5px 0 0; font-size: 12px; color: #56677e; }
+.active-reminder-hint { margin: 9px 0 0; font-size: 13px; line-height: 1.7; color: #46678b; overflow-wrap: anywhere; }
+.needs-response .active-reminder-hint { color: #865a1e; }
+.active-reminder-error { margin: 8px 0 0; color: #a03c34; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.active-reminder-details { margin-top: 10px; }
+.active-reminder-details > summary { width: fit-content; cursor: pointer; color: #3867a6; font-size: 12px; }
+.active-reminder-details > summary:focus-visible { outline: 2px solid #3867a6; outline-offset: 4px; border-radius: 2px; }
+.active-reminder-details[open] .reminder-meta { display: grid; gap: 6px; margin-top: 10px; line-height: 1.7; }
+.active-reminder-details .reminder-meta p { margin: 0; }
+.active-reminder-actions { justify-self: end; padding-top: 3px; }
+.active-reminder-actions .ant-space { justify-content: flex-end; }
+.active-reminder-actions .ant-btn { min-height: 30px; padding-inline: 10px; }
+.reminder-queue-empty { display: flex; align-items: center; gap: 16px; padding: 28px 4px 8px; color: #7186a2; }
+.reminder-queue-empty > .anticon { flex-shrink: 0; font-size: 30px; }
+.reminder-queue-empty h3 { margin: 0 0 5px; font-size: 14px; font-weight: 500; color: #405b7c; }
+.reminder-queue-empty p { margin: 0; color: #56677e; font-size: 12px; line-height: 1.7; }
+@media (max-width: 1050px) {
+  .active-reminder { grid-template-columns: 112px minmax(0, 1fr); gap: 16px; }
+  .active-reminder-actions { grid-column: 2; justify-self: start; padding-top: 0; }
+  .active-reminder-actions .ant-space { justify-content: flex-start; }
+}
+@media (max-width: 650px) {
+  .reminder-queue { padding: 18px 14px; }
+  .reminder-queue-heading { align-items: flex-start; flex-wrap: wrap; }
+  .active-reminder { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 16px; }
+  .active-reminder-time { border-right: 0; border-bottom: 1px solid #dce6f2; padding: 0 0 12px; gap: 5px; }
+  .active-reminder-time time { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px 14px; }
+  .active-reminder-time strong { font-size: 24px; }
+  .active-reminder-actions { grid-column: 1; padding-top: 0; }
+  .active-reminder-actions .ant-btn { min-height: 36px; }
+}
+.reminder-music-settings h2 { color: #3867a6; margin-bottom: 8px; }
+.reminder-music-settings .reminder-meta { margin-top: 10px; line-height: 1.7; }
+.reminder-music-settings > .reminder-meta { margin-top: 0; }
+.reminder-music-settings .ant-alert { margin-top: 12px; }
+.reminder-music-groups { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; margin-top: 20px; align-items: start; }
+.reminder-music-group { min-width: 0; }
+.reminder-music-group + .reminder-music-group { border-left: 1px solid #dde4ee; padding-left: 28px; }
+.reminder-music-group h3 { margin: 0 0 12px; font-size: 14px; color: #344761; }
+.reminder-music-track-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.reminder-music-track-row .ant-select { min-width: 0; }
+.reminder-music-volume-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 12px; }
+.reminder-music-volume-row output { font-size: 14px; font-variant-numeric: tabular-nums; color: #344761; }
+.reminder-music-settings .ant-slider { margin: 10px 12px 0; }
+.reminder-music-slider { min-width: 0; }
+.reminder-music-slider output { display: block; margin-top: 30px; }
+.task-editor { max-width: 100%; }
+.task-editor .ant-form-item { margin-bottom: 20px; }
+.task-editor .ant-form-item-label > label { color: #344761; font-weight: 500; }
+.task-editor .ant-form-item-extra { color: #718096; font-size: 12px; padding-top: 6px; }
+.task-date-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 24px; }
+.task-date-grid > * { min-width: 0; }
+.task-repeat-field { max-width: 360px; }
+.task-form-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; padding-top: 16px; margin-top: 8px; border-top: 1px solid #e2eaf4; font-size: 13px; line-height: 1.7; }
+.task-form-summary > span { color: #718096; }
+.task-form-summary p { margin: 0; color: #344761; }
+.task-create-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
+.task-create-actions > .ant-btn { min-width: 150px; }
+.task-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.task-list-note { margin: 8px 0 0; color: #56677e; font-size: 12px; line-height: 1.7; }
+.task-list { min-width: 0; width: 100%; max-width: 100%; overflow: hidden; }
+.task-table { min-width: 0; width: 100%; max-width: 100%; }
+.task-table .ant-table-cell { vertical-align: top; }
+.task-content { white-space: pre-wrap; overflow-wrap: anywhere; color: #294866; font-weight: 500; }
+.task-time-list { display: grid; gap: 6px; color: #56677e; font-size: 12px; line-height: 1.6; }
+.task-time-list .is-overdue { color: #a15d24; }
+.task-status-stack { display: grid; justify-items: start; gap: 8px; }
+.task-status-stack .ant-tag { margin: 0; }
+.task-reminder-switch { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 0; border-top: 1px solid #e2eaf4; margin: 0 0 8px; }
+.task-reminder-switch .ant-form-item { margin: 0; }
+.task-reminder-switch p { margin: 3px 0 0; color: #56677e; font-size: 12px; line-height: 1.6; }
+.task-reminder-fields { padding-top: 4px; }
+.task-action-note { margin: 6px 0 0; color: #56677e; font-size: 12px; line-height: 1.6; }
+.task-loading { display: flex; align-items: center; gap: 10px; min-height: 20px; margin: 16px 0; color: #56677e; font-size: 12px; }
+.task-list .task-table { margin-top: 18px; }
+.task-list .ant-table-container { border: 1px solid #e2eaf4; border-radius: 8px; }
+.task-list .ant-table-thead > tr > th { background: #f5f9ff; color: #294866; }
+.task-list .ant-table-cell { padding: 12px 10px; }
+.task-list > .section-heading { align-items: center; }
+.task-list > .section-heading > span { color: #56677e; font-size: 12px; }
+.reminders-page > .ant-alert + .ant-alert { margin-top: 12px; }
+.task-reminder-fields .reminder-reason { line-height: 1.6; }
+.reminder-history { margin-top: 24px; }
+.reminder-history > summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; cursor: pointer; list-style: none; font-size: 17px; font-weight: 600; color: #294866; }
+.reminder-history > summary::-webkit-details-marker, .history-item-details > summary::-webkit-details-marker { display: none; }
+.reminder-history > summary::after { content: '展开'; color: #3867a6; font-size: 13px; font-weight: 400; }
+.reminder-history[open] > summary::after { content: '收起'; }
+.reminder-history > summary strong { margin-left: 8px; color: #6c7e96; font-size: 13px; font-weight: 400; }
+.history-summary-hint { margin-left: auto; color: #71829a; font-size: 12px; font-weight: 400; }
+.history-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.history-filter-count { margin-left: 4px; font-variant-numeric: tabular-nums; opacity: .8; }
+.history-empty { margin: 20px 0 4px; color: #65758b; font-size: 13px; }
+.reminder-history-list { display: grid; gap: 8px; margin-top: 18px; }
+.reminder-history-item { padding: 13px 16px; border: 1px solid #e2eaf4; border-radius: 10px; background: #f8faff; }
+.history-item-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.history-item-main h3 { margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 14px; font-weight: 600; }
+.history-item-main .ant-tag { flex-shrink: 0; margin: 0; }
+.history-item-main time { flex-shrink: 0; color: #65758b; font-size: 12px; font-variant-numeric: tabular-nums; }
+.history-item-details > summary { width: fit-content; margin-top: 7px; cursor: pointer; list-style: none; color: #3867a6; font-size: 12px; }
+.history-item-details > summary::after { content: '⌄'; margin-left: 6px; }
+.history-item-details[open] > summary::after { content: '⌃'; }
+.history-item-body { margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2eaf4; }
+.history-item-body .reminder-meta { margin: 0 0 10px; }
+.history-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 16px; color: #65758b; font-size: 12px; }
+@media (max-width: 650px) { .history-summary-hint { display: none; } .history-item-main { flex-wrap: wrap; } .history-item-main h3 { flex-basis: 100%; } .history-item-main time { margin-left: auto; } }
+@media (max-width: 900px) {
+  .reminder-music-groups { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .reminder-music-group + .reminder-music-group { border-left: 0; padding-left: 0; border-top: 1px solid #dde4ee; padding-top: 20px; }
+}
+@media (max-width: 650px) { .reminder-music-track-row { grid-template-columns: 1fr; } }
+
+@media (max-width: 650px) { .task-date-grid { grid-template-columns: minmax(0, 1fr); } .task-repeat-field { max-width: none; } }
+
+.task-mode-tabs { display: flex; gap: 12px; margin: 20px 0; }
+.task-mode-tabs .ant-btn { min-width: 120px; }
+
+.schedule-panels:not([hidden]) { display: grid; gap: 24px; min-width: 0; }

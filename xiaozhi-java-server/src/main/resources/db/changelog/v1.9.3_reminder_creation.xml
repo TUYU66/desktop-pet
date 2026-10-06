@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20260930-reminder-creation-receipt" author="codex">
+  <createTable tableName="reminder_creation">
+   <column name="id" type="VARCHAR(36)"><constraints primaryKey="true" nullable="false"/></column>
+   <column name="user_id" type="BIGINT"><constraints nullable="false"/></column>
+   <column name="device_id" type="VARCHAR(64)"><constraints nullable="false"/></column>
+   <column name="title" type="VARCHAR(120)"><constraints nullable="false"/></column>
+   <column name="trigger_at" type="BIGINT"/>
+   <column name="recurrence" type="VARCHAR(64)"><constraints nullable="false"/></column>
+   <column name="seconds" type="BIGINT"/>
+   <column name="created_at" type="BIGINT"><constraints nullable="false"/></column>
+  </createTable>
+  <sql><![CDATA[
+   INSERT INTO reminder_creation(id,user_id,device_id,title,trigger_at,recurrence,seconds,created_at)
+    SELECT id,user_id,device_id,title,CASE WHEN initial_seconds>0 THEN NULL ELSE requested_at END,'once',CASE WHEN initial_seconds>0 THEN initial_seconds ELSE NULL END,created_at FROM user_reminder WHERE task_id IS NULL AND plan_id IS NULL;
+   INSERT IGNORE INTO reminder_creation(id,user_id,device_id,title,trigger_at,recurrence,seconds,created_at)
+    SELECT id,user_id,device_id,title,initial_at,recurrence,NULL,created_at FROM reminder_plan WHERE task_enabled=false;
+  ]]></sql>
+ </changeSet>
+</databaseChangeLog>

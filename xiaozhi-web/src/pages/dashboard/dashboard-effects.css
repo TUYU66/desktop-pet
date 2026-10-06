@@ -1,0 +1,45 @@
+.tech-overview { position: relative; isolation: isolate; }
+.tech-overview::before { content: ''; position: absolute; inset: -20px; z-index: -1; pointer-events: none; background-image: radial-gradient(#527bab40 .8px, transparent .8px); background-size: 20px 20px; mask-image: linear-gradient(#000, transparent 85%); }
+.overview-actions { display: flex; gap: 12px; align-items: center; }
+.overview-actions label { color: #56677e; font-size: 12px; }
+.tech-panel { position: relative; overflow: hidden; isolation: isolate; min-height: 340px; padding: 40px 48px; border: 1px solid #d3e2f7; border-radius: 24px; background: radial-gradient(ellipse at 85% 15%, #bce6fc80, transparent 55%), linear-gradient(120deg, #fcfdff, #edf3ff 58%, #deeafa); box-shadow: 0 12px 36px #244b8010, inset 0 1px 0 #fff; }
+.panel-spotlight { position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0; background: radial-gradient(380px circle at var(--spot-x, 70%) var(--spot-y, 40%), #6bafff38, transparent 75%); transition: opacity .25s; }
+.effects-on .tech-panel:hover .panel-spotlight { opacity: 1; }
+.tech-copy { max-width: 55%; }
+.tech-panel h2 { font-size: clamp(30px, 3vw, 42px); line-height: 1.3; margin: 22px 0 16px; overflow-wrap: anywhere; }
+.tech-panel h2 span { display: block; font-size: 18px; font-weight: 400; color: #45678c; margin-top: 8px; }
+.tech-panel p { font-size: 14px; color: #4c6582; }
+.tech-links { display: flex; gap: 24px; align-items: center; margin-top: 26px; flex-wrap: wrap; }
+.tech-links .primary-link { margin: 0; background: linear-gradient(135deg, #367adc, #475ebc); box-shadow: 0 5px 14px #366aba30; border: 1px solid #ffffff60; }
+.tech-links .primary-link:hover { background: #305da6; }
+.secondary-link { font-size: 13px; color: #385e91; }
+.hero-details { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 28px; font-size: 12px; color: #5b7290; }
+.hero-details span::before { content: ''; display: inline-block; width: 5px; height: 5px; margin: 0 7px 2px 0; border-radius: 50%; background: #6596cd; }
+.robot-stage { position: relative; width: 300px; height: 260px; flex-shrink: 0; display: grid; place-items: center; }
+.stage-orbit { position: absolute; width: 264px; height: 210px; border: 1px solid #8bb4e050; border-radius: 50%; transform: rotate(-25deg); }
+.orbit-front { width: 300px; height: 145px; transform: rotate(25deg); border-color: #7ba4db40; }
+.robot-frame { position: relative; padding: 2px; border-radius: 36px; width: 186px; height: 178px; isolation: isolate; overflow: hidden; box-shadow: 0 16px 26px #46699028; background: #b9cfe9; }
+.border-tracer { position: absolute; inset: -55%; background: conic-gradient(from 0deg, transparent 0 65%, #8ce5ff 76%, #527dff 86%, #e9f9ff 92%, transparent 98%); z-index: -1; }
+.effects-on .border-tracer { animation: border-travel 7s linear infinite; }
+.robot-shell { height: 100%; border: 5px solid #f8fbff; border-radius: 34px; background: linear-gradient(140deg, #fff, #dce8fa); padding: 14px 8px 8px; }
+.tech-panel .robot-display { width: 100%; height: 106px; border: 1px solid #9baeca; border-radius: 24px; background: radial-gradient(ellipse at top, #31557c, #162c48); box-shadow: inset 0 2px 8px #0a1b3880; gap: 35px; }
+.tech-panel .robot-display i { height: 24px; width: 12px; background: #b7eeff; box-shadow: 0 0 14px #68d8ff70; }
+.tech-panel .robot-display span { border-color: #b7eeff; bottom: 22px; }
+.robot-chin { display: flex; justify-content: center; gap: 5px; margin-top: 12px; }
+.robot-chin b { width: 3px; height: 8px; border-radius: 4px; background: #8aabc9; }
+.stage-plinth { position: absolute; bottom: 6px; width: 165px; height: 25px; border-radius: 50%; border: 1px solid #83a8da50; background: radial-gradient(ellipse, #6998d330, transparent 70%); }
+.tech-overview .surface { background: #ffffffeb; border-color: #dce5f1; box-shadow: 0 5px 18px #254b7b06; }
+.tech-overview .section-heading { border-bottom: 1px solid #e9eff7; padding-bottom: 14px; }
+@keyframes border-travel { to { transform: rotate(360deg); } }
+.effects-off .panel-spotlight { display: none; }
+@media (prefers-reduced-motion: reduce) { .effects-on .border-tracer { animation: none; } .panel-spotlight { display: none; } }
+@media (max-width: 1100px) { .tech-panel { padding: 32px; gap: 12px; } .robot-stage { width: 240px; } .stage-orbit { width: 230px; } .orbit-front { width: 245px; } }
+@media (max-width: 760px) { .tech-overview::before { inset: 0; } .tech-panel { flex-direction: column-reverse; padding: 24px; gap: 16px; } .tech-copy { max-width: 100%; width: 100%; } .robot-stage { height: 215px; width: 100%; } .stage-plinth { bottom: 0; } .tech-panel h2 { margin-top: 14px; } .overview-actions { gap: 8px; } .tech-overview .page-heading { align-items: flex-start; flex-wrap: wrap; } }
+.recent-conversations { margin-top: 24px; }
+.recent-message-list { display: grid; gap: 10px; }
+.recent-message { display: flex; align-items: baseline; gap: 14px; padding: 13px 16px; background: #f6f9fe; border: 1px solid #e3ebf6; border-radius: 12px; font-size: 13px; }
+.recent-message .preview-message { margin: 0; }
+.recent-message time { flex-shrink: 0; font-size: 11px; color: #71829a; }
+.preview-speaker { color: #6582a7; flex-shrink: 0; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.preview-message { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; line-height: 1.7; }
+@media (max-width: 650px) { .recent-message { flex-wrap: wrap; gap: 4px 10px; } .recent-message .preview-message { order: 3; flex-basis: 100%; } .recent-message time { margin-left: auto; } }
