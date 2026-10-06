@@ -2,6 +2,17 @@
 
 基于小智语音交互的桌面机器人项目，包含网页控制台、Java 服务、Python 语音服务、ESP32-S3 固件和 STM32 平衡底盘。
 
+## 实物展示
+
+实物原型及 LCD 表情、音乐与歌词显示效果。
+
+| LCD 表情 | 音乐与歌词显示 |
+| --- | --- |
+| ![机器人正面与 LCD 表情](docs/showcase/robot-face.jpg) | ![机器人播放音乐与歌词显示](docs/showcase/robot-music.jpg) |
+
+- [查看实物演示视频 1](docs/showcase/demo-01.mp4)
+- [查看实物演示视频 2](docs/showcase/demo-02.mp4)
+
 ## 项目结构
 
 | 目录 | 内容 |
