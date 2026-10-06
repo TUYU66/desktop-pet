@@ -13,6 +13,54 @@
 - [查看实物演示视频 1](docs/showcase/demo-01.mp4)
 - [查看实物演示视频 2](docs/showcase/demo-02.mp4)
 
+## 网页展示
+
+网页控制台提供设备状态、对话记录、长期记忆、日程提醒、音乐播放及角色配置。
+
+![概览与设备控制台](docs/showcase/web/overview.png)
+
+<details>
+<summary>表情预览与屏幕控制</summary>
+
+![LCD 表情预览、音量、亮度与颜色设置](docs/showcase/web/face-preview.png)
+
+</details>
+
+<details>
+<summary>对话记录</summary>
+
+![聊天记录与网页文字对话](docs/showcase/web/chat.png)
+
+</details>
+
+<details>
+<summary>长期记忆</summary>
+
+![长期记忆分类、检索与编辑](docs/showcase/web/memory.png)
+
+</details>
+
+<details>
+<summary>日程提醒</summary>
+
+![单次提醒创建与周期安排](docs/showcase/web/reminders.png)
+
+</details>
+
+<details>
+<summary>音乐空间</summary>
+
+![网易云与本地音乐、播放进度及歌词](docs/showcase/web/music.png)
+
+</details>
+
+<details>
+<summary>桌面宠物设置</summary>
+
+![角色名称、说话风格、音色与唤醒词配置](docs/showcase/web/settings.png)
+
+</details>
+
 ## 项目结构
 
 | 目录 | 内容 |
