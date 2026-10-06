@@ -10,6 +10,7 @@
 | `xiaozhi-java-server` | Java 17 / Spring Boot，账户、配置、数据库和日程调度 |
 | `xiaozhi-python-server` | 语音识别、LLM、语音合成、意图处理、音乐与设备通信 |
 | `xiaozhi-python-server/netease-api` | 网易云 Node.js 调用桥接；保留依赖清单与锁文件 |
+| `NewNow` | NewsNow 新闻热点服务的 Docker Compose 部署配置 |
 | `xiaozhi-esp32-main` | ESP32-S3 面包板 LCD 固件，麦克风、扬声器、表情、字幕与 STM32 串口 |
 | `stm32/Balance_Car_KEil_HAL` | STM32 底盘源码及 Keil 工程，平衡、电机补偿、转向与蓝牙控制 |
 
@@ -45,6 +46,25 @@
 需要网易云功能时，进入 `netease-api` 执行 `npm ci`；桥接要求 Node.js 22 或以上，通过 Python 服务调用，无需额外启动独立 HTTP 服务。登录信息保存在本地运行数据中，用户需要重新登录。
 
 服务 URL 和内部通信密钥使用项目代码支持的环境变量配置。不要把真实密钥写入源码或提交到仓库。
+
+### 新闻热点服务（NewsNow）
+
+新闻接口依赖单独的 NewsNow 服务。安装并启动 Docker 后，在仓库根目录执行：
+
+```powershell
+docker compose -f NewNow/docker-compose.yml up -d
+```
+
+Compose 使用 `ghcr.io/ourongxing/newsnow:latest` 镜像，映射本机 4444 端口。Python 示例配置中的 `plugins.get_news_from_newsnow.url` 指向 `http://127.0.0.1:4444/api/s?id=`，与这份部署配置对应。
+
+查看日志和停止服务：
+
+```powershell
+docker compose -f NewNow/docker-compose.yml logs -f newsnow
+docker compose -f NewNow/docker-compose.yml down
+```
+
+运行数据保存在 Docker 的 `newsnow_data` 命名卷中，不上传到 GitHub。Compose 中账户、JWT 和 Product Hunt 相关变量保留为空模板；按自己的部署需要在本地配置，勿提交真实密钥。整理仓库时没有启动或更改本机 Docker 服务。
 
 ### ESP32
 
