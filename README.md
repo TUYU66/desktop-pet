@@ -12,6 +12,7 @@ ESP32-S3 负责唤醒、收音、播音与 LCD 表情，STM32 负责平衡及运
 | --- | --- |
 | ![机器人正面与 LCD 表情](assets/showcase/robot-face.jpg) | ![机器人播放音乐与歌词显示](assets/showcase/robot-music.jpg) |
 
+- [查看新增项目演示视频](assets/showcase/demo-03.mp4)
 - [查看实物演示视频 1](assets/showcase/demo-01.mp4)
 - [查看实物演示视频 2](assets/showcase/demo-02.mp4)
 
