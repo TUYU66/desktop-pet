@@ -69,34 +69,6 @@ public class MemoryFactStore {
         return Map.of("schemaVersion",2,"userId",owner,"roleId",role,"revision",revision,"memories",records,"truncated",truncated);
     }
 
-    /** 提取读取有界属性目录；解析后精确查当前槽和选中ID，均保持用户/角色作用域。 */
-    @Transactional
-    public Map<String,Object> searchControlled(Long owner, String role, List<String> keys, List<String> terms, List<Long> ids, String stage, String queryText) {
-        long revision=lock(owner,role);
-        List<UserMemoryEntity> records;
-        int cap;
-        if("extract".equals(stage)) {
-            cap=60;
-            // 召回相关属性及别名；不因全库增长到60条就阻断所有自动记忆。
-            var query=owned(owner,role).isNotNull(UserMemoryEntity::getFactJson);
-            if(!terms.isEmpty()||!queryText.isEmpty()) query.and(w->{
-                for(String term:terms) w.or().like(UserMemoryEntity::getContent,term).or().like(UserMemoryEntity::getFactJson,term);
-                if(!queryText.isEmpty()) w.or().apply("LOCATE(NULLIF(REPLACE(REPLACE(REPLACE(JSON_UNQUOTE(JSON_EXTRACT(CASE WHEN JSON_VALID(fact_json) THEN fact_json ELSE '{}' END, '$.subject')), '用户的', ''), '用户', ''), 'user', ''), ''), {0}) > 0",queryText);
-            });
-            records=dao.selectList(query.orderByDesc(UserMemoryEntity::getUpdateDate).orderByDesc(UserMemoryEntity::getId).last("LIMIT 61"));
-        } else if("resolve".equals(stage)) {
-            cap=60;
-            if(keys.isEmpty()&&ids.isEmpty()) records=List.of();
-            else records=dao.selectList(owned(owner,role).and(w->{
-                if(!keys.isEmpty()) w.in(UserMemoryEntity::getSlotKey,keys.stream().map(k->hash(k+"\u001fcurrent\u001f")).toList());
-                if(!ids.isEmpty()) { if(!keys.isEmpty()) w.or(); w.in(UserMemoryEntity::getId,ids); }
-            }).orderByDesc(UserMemoryEntity::getUpdateDate).orderByDesc(UserMemoryEntity::getId).last("LIMIT 61"));
-        } else throw new IllegalArgumentException("检索阶段无效");
-        boolean truncated=records.size()>cap;
-        return Map.of("schemaVersion",2,"retrievalVersion",1,"writeProtocolVersion",3,"userId",owner,"roleId",role,"revision",revision,
-            "memories",truncated?records.subList(0,cap):records,"truncated",truncated);
-    }
-
     public static class Conflict extends RuntimeException { public Conflict(String message) { super(message); } }
 
     /** 历史只取自服务端旧记录；客户端不能提交或改写历史快照。 */

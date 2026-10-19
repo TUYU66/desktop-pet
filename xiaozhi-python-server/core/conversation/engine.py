@@ -702,10 +702,3 @@ class ConversationEngine:
                 )
 
         return True
-
-    def chat_and_close(self, text):
-        try:
-            self.chat(text)
-            self.close_after_chat = True
-        except Exception as e:
-            self.logger.bind(tag=TAG).error(f"Chat and close error: {str(e)}")

@@ -17,6 +17,27 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class AuthFilterTest {
+    @Test void retiredChatMemoryRoutesRejectEvenValidPythonServiceKey() {
+        for (var route : java.util.List.of(
+                new String[]{"POST", "/xiaozhi/api/chat/memory/session1"},
+                new String[]{"GET", "/xiaozhi/api/chat/memory/role1"},
+                new String[]{"DELETE", "/xiaozhi/api/chat/memory/role1"},
+                new String[]{"GET", "/xiaozhi/api/chat/sessions/session1/memory"})) {
+            var filter = new AuthFilter();
+            var users = mock(UserDao.class);
+            ReflectionTestUtils.setField(filter, "userDao", users);
+            ReflectionTestUtils.setField(filter, "pythonServiceKey", "test-private-python");
+            var exchange = MockServerWebExchange.from(MockServerHttpRequest
+                .method(org.springframework.http.HttpMethod.valueOf(route[0]), route[1])
+                .header("Service-Key", "test-private-python"));
+            var called = new AtomicBoolean();
+            StepVerifier.create(filter.filter(exchange, x -> { called.set(true); return Mono.empty(); })).verifyComplete();
+            assertFalse(called.get());
+            assertEquals(HttpStatus.UNAUTHORIZED, exchange.getResponse().getStatusCode());
+            verifyNoInteractions(users);
+        }
+    }
+
     @Test void reminderInternalDefaultKeyRequiresLoopback() {
         checkReminderInternal("192.168.1.2","","xiaozhi-reminders",1,false);
         checkReminderInternal("127.0.0.1","","xiaozhi-reminders",1,false);

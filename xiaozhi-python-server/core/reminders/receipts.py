@@ -14,7 +14,3 @@ def verified(result, body, device):
             and value.get('recurrence')==body.get('recurrence','once')
             and value.get('seconds')==body.get('seconds')
             and isinstance(result.get('current'),dict) and result['current'].get('status') in STATUS)
-
-
-def status_text(result):
-    return STATUS.get(result.get('current',{}).get('status'),'状态待核实')

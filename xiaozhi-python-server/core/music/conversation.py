@@ -260,11 +260,6 @@ async def handle_input(conn, text, web=False):
     return False, text
 
 
-def playlist_answer(result):
-    from core.conversation.feedback import music_feedback
-    return music_feedback('play', result)
-
-
 def search_answer(result):
     rows = result.get('results', [])
     source = '本地' if result.get('source')=='local' else '网易云'

@@ -7,14 +7,6 @@ _device_daily_output: Dict[Tuple[str, datetime.date], int] = {}
 _last_check_date: datetime.date = None
 
 
-def reset_device_output():
-    """
-    重置所有设备的每日输出字数
-    每天0点调用此函数
-    """
-    _device_daily_output.clear()
-
-
 def get_device_output(device_id: str) -> int:
     """
     获取设备当日的输出字数

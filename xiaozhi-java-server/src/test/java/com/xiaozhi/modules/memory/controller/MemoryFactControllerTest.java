@@ -33,19 +33,7 @@ class MemoryFactControllerTest {
     @Test void requiresAuthentication() {
         assertEquals(401,new MemoryFactController(mock(MemoryFactStore.class)).search(null,Map.of()).getCode());
     }
-    @Test void controlledSearchPreservesOwnerStageAndSelectedTarget() {
-        MemoryFactStore store=mock(MemoryFactStore.class);
-        new MemoryFactController(store).search(user(),Map.of("controlledStage","resolve","ids",List.of(11),"keys",List.of("key"),"controlledQuery",""));
-        verify(store).searchControlled(7L,"default",List.of("key"),List.of(),List.of(11L),"resolve","");
-    }
-    @Test void controlledSearchRejectsInvalidOrUnboundedRequests() {
-        MemoryFactStore store=mock(MemoryFactStore.class);
-        for(var body:List.of(Map.<String,Object>of("controlledStage","all"),
-                Map.<String,Object>of("controlledStage","resolve","ids",Collections.nCopies(9,1)),
-                Map.<String,Object>of("controlledStage","extract","controlledQuery","x".repeat(2401))))
-            assertNotEquals(0,new MemoryFactController(store).search(user(),body).getCode());
-        verifyNoInteractions(store);
-    }
+
     @Test void rejectsWrongCurrentTimeAndFutureHistory() {
         Map<String,Object> f=fact(); f.put("timeValue","2025-09-13");
         assertThrows(IllegalArgumentException.class,()->MemoryFactController.validateFact(f));

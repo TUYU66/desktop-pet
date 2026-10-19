@@ -1,7 +1,5 @@
 import re
 import os
-import json
-import copy
 import struct
 import wave
 import socket
@@ -29,59 +27,9 @@ def get_local_ip():
         return "127.0.0.1"
 
 
-def is_private_ip(ip_addr):
-    """
-    Check if an IP address is a private IP address (compatible with IPv4 and IPv6).
-
-    @param {string} ip_addr - The IP address to check.
-    @return {bool} True if the IP address is private, False otherwise.
-    """
-    try:
-        # Validate IPv4 or IPv6 address format
-        if not re.match(
-            r"^(\d{1,3}\.){3}\d{1,3}$|^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$", ip_addr
-        ):
-            return False  # Invalid IP address format
-
-        # IPv4 private address ranges
-        if "." in ip_addr:  # IPv4 address
-            ip_parts = list(map(int, ip_addr.split(".")))
-            if ip_parts[0] == 10:
-                return True  # 10.0.0.0/8 range
-            elif ip_parts[0] == 172 and 16 <= ip_parts[1] <= 31:
-                return True  # 172.16.0.0/12 range
-            elif ip_parts[0] == 192 and ip_parts[1] == 168:
-                return True  # 192.168.0.0/16 range
-            elif ip_addr == "127.0.0.1":
-                return True  # Loopback address
-            elif ip_parts[0] == 169 and ip_parts[1] == 254:
-                return True  # Link-local address 169.254.0.0/16
-            else:
-                return False  # Not a private IPv4 address
-        else:  # IPv6 address
-            ip_addr = ip_addr.lower()
-            if ip_addr.startswith("fc00:") or ip_addr.startswith("fd00:"):
-                return True  # Unique Local Addresses (FC00::/7)
-            elif ip_addr == "::1":
-                return True  # Loopback address
-            elif ip_addr.startswith("fe80:"):
-                return True  # Link-local unicast addresses (FE80::/10)
-            else:
-                return False  # Not a private IPv6 address
-
-    except (ValueError, IndexError):
-        return False  # IP address format error or insufficient segments
-
-
 def get_ip_info(ip_addr, logger):
     from core.utils.ip_location import get_ip_info as lookup
     return lookup(ip_addr, logger)
-
-
-def write_json_file(file_path, data):
-    """将数据写入 JSON 文件"""
-    with open(file_path, "w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=4)
 
 
 def remove_punctuation_and_length(text):
@@ -114,24 +62,6 @@ def check_model_key(modelType, modelKey):
     if not modelKey or len(modelKey.strip()) == 0 or "你" in modelKey:
         return f"配置错误: {modelType} 的 API key 未设置,当前值为: {modelKey}"
     return None
-
-
-def parse_string_to_list(value, separator=";"):
-    """
-    将输入值转换为列表
-    Args:
-        value: 输入值，可以是 None、字符串或列表
-        separator: 分隔符，默认为分号
-    Returns:
-        list: 处理后的列表
-    """
-    if value is None or value == "":
-        return []
-    elif isinstance(value, str):
-        return [item.strip() for item in value.split(separator) if item.strip()]
-    elif isinstance(value, list):
-        return value
-    return []
 
 
 def check_ffmpeg_installed() -> bool:
@@ -468,103 +398,6 @@ def opus_datas_to_wav_bytes(opus_datas, sample_rate=16000, channels=1):
     except Exception as e:
         logger.error(f"opus_datas_to_wav_bytes 失败: {e}")
         return b""
-
-
-def check_vad_update(before_config, new_config):
-    if (
-        new_config.get("selected_module") is None
-        or new_config["selected_module"].get("VAD") is None
-    ):
-        return False
-    update_vad = False
-    current_vad_module = before_config["selected_module"]["VAD"]
-    new_vad_module = new_config["selected_module"]["VAD"]
-    current_vad_type = (
-        current_vad_module
-        if "type" not in before_config["VAD"][current_vad_module]
-        else before_config["VAD"][current_vad_module]["type"]
-    )
-    new_vad_type = (
-        new_vad_module
-        if "type" not in new_config["VAD"][new_vad_module]
-        else new_config["VAD"][new_vad_module]["type"]
-    )
-    update_vad = current_vad_type != new_vad_type
-    return update_vad
-
-
-def check_asr_update(before_config, new_config):
-    if (
-        new_config.get("selected_module") is None
-        or new_config["selected_module"].get("ASR") is None
-    ):
-        return False
-    update_asr = False
-    current_asr_module = before_config["selected_module"]["ASR"]
-    new_asr_module = new_config["selected_module"]["ASR"]
-
-    # 如果模块名称不同，就需要更新
-    if current_asr_module != new_asr_module:
-        return True
-
-    # 如果模块名称相同，再比较类型
-    current_asr_type = (
-        current_asr_module
-        if "type" not in before_config["ASR"][current_asr_module]
-        else before_config["ASR"][current_asr_module]["type"]
-    )
-    new_asr_type = (
-        new_asr_module
-        if "type" not in new_config["ASR"][new_asr_module]
-        else new_config["ASR"][new_asr_module]["type"]
-    )
-    update_asr = current_asr_type != new_asr_type
-    return update_asr
-
-
-def filter_sensitive_info(config: dict) -> dict:
-    """
-    过滤配置中的敏感信息
-    Args:
-        config: 原始配置字典
-    Returns:
-        过滤后的配置字典
-    """
-    sensitive_keys = [
-        "api_key",
-        "personal_access_token",
-        "access_token",
-        "token",
-        "secret",
-        "access_key_secret",
-        "secret_key",
-    ]
-
-    def _filter_dict(d: dict) -> dict:
-        filtered = {}
-        for k, v in d.items():
-            if any(sensitive in k.lower() for sensitive in sensitive_keys):
-                filtered[k] = "***"
-            elif isinstance(v, dict):
-                filtered[k] = _filter_dict(v)
-            elif isinstance(v, list):
-                filtered[k] = [_filter_dict(i) if isinstance(i, dict) else i for i in v]
-            elif isinstance(v, str):
-                try:
-                    json_data = json.loads(v)
-                    if isinstance(json_data, dict):
-                        filtered[k] = json.dumps(
-                            _filter_dict(json_data), ensure_ascii=False
-                        )
-                    else:
-                        filtered[k] = v
-                except (json.JSONDecodeError, TypeError):
-                    filtered[k] = v
-            else:
-                filtered[k] = v
-        return filtered
-
-    return _filter_dict(copy.deepcopy(config))
 
 
 def get_vision_url(config: dict) -> str:

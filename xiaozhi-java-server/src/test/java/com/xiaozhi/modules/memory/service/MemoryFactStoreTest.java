@@ -89,26 +89,4 @@ class MemoryFactStoreTest {
         assertNotNull(MemoryFactStore.class.getMethod("commit",Long.class,String.class,long.class,String.class,List.class).getAnnotation(Transactional.class));
     }
 
-    @Test void controlledExtractionSearchesAttributesAndAliasesAndReportsTruncation() {
-        List<UserMemoryEntity> rows=new ArrayList<>();
-        for(long i=0;i<61;i++) { UserMemoryEntity m=new UserMemoryEntity(); m.setId(i); rows.add(m); }
-        when(dao.selectList(any())).thenReturn(rows);
-        var result=store.searchControlled(7L,"default",List.of(),List.of("摄影"),List.of(),"extract","我又养一只猫");
-        assertEquals(60,((List<?>)result.get("memories")).size()); assertEquals(true,result.get("truncated"));
-        assertEquals(1,result.get("retrievalVersion"));
-        verify(dao).selectList(argThat(w->{ String sql=w.getSqlSegment();
-            return sql.contains("user_id")&&sql.contains("role_id")&&sql.contains("LOCATE")&&sql.contains("content LIKE")&&sql.contains("fact_json LIKE")&&sql.contains("LIMIT 61"); }));
-    }
-
-    @Test void controlledResolutionUsesExactSlotsAndScopedIdsOnly() {
-        when(dao.selectList(any())).thenReturn(List.of());
-        store.searchControlled(7L,"default",List.of("key"),List.of("ignored"),List.of(11L),"resolve","");
-        verify(dao).selectList(argThat(w->{ String sql=w.getSqlSegment();
-            return sql.contains("user_id")&&sql.contains("role_id")&&sql.contains("slot_key IN")&&sql.contains("id IN")&&!sql.contains("LIKE"); }));
-    }
-
-    @Test void emptyResolutionDoesNotFallBackToAllMemories() {
-        assertEquals(List.of(),store.searchControlled(7L,"default",List.of(),List.of(),List.of(),"resolve","").get("memories"));
-        verifyNoInteractions(dao);
-    }
 }

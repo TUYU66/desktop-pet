@@ -19,7 +19,3 @@ export function getWakeWordStatus(signal?: AbortSignal) {
 export function saveBotConfig(data: Record<string, string>) {
   return request.put('/user/config', data);
 }
-
-export function getPubConfig() {
-  return request.get('/user/pub-config');
-}

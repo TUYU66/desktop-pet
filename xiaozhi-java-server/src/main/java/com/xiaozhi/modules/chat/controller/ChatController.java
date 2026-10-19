@@ -227,58 +227,7 @@ public class ChatController {
                     .onErrorReturn(Result.error("无法查询设备状态，请检查 Python 服务"));
     }
 
-    /** 清除指定角色的记忆（转发到 Python） */
-    @DeleteMapping("/memory/{roleId}")
-    public Mono<Result<Object>> clearMemory(@PathVariable String roleId) {
-        return webClient.delete()
-                    .uri(pythonBaseUrl + "/xiaozhi/memory/" + roleId)
-                    .header("Service-Key",deviceServiceKey)
-                    .retrieve()
-                    .bodyToMono(Map.class)
-                    .map(body -> ((Number)body.getOrDefault("code",500)).intValue()==0
-                        ? Result.ok() : Result.error("清除记忆未确认"))
-                    .defaultIfEmpty(Result.error("清除记忆响应为空"))
-                    .timeout(Duration.ofSeconds(10))
-                    .onErrorReturn(Result.error("清除记忆失败，请核实服务状态"));
-    }
-
-    /** 保存会话记忆摘要（Python 调用 → 存入数据库） */
-    @PostMapping("/memory/{sessionId}")
-    public Result<?> saveMemory(@PathVariable String sessionId, @RequestBody Map<String, String> body) {
-        String summary = body.get("summary");
-        if (sessionId == null || summary == null) return Result.error("参数不足");
-
-        ChatTitleEntity existing = titleDao.selectOne(
-                new LambdaQueryWrapper<ChatTitleEntity>().eq(ChatTitleEntity::getSessionId, sessionId));
-        if (existing != null) {
-            existing.setMemorySummary(summary);
-            existing.setUpdateDate(LocalDateTime.now(ZoneId.of("Asia/Shanghai")));
-            titleDao.updateById(existing);
-        } else {
-            // 防止竞态：title 尚未创建，先创建再存记忆
-            ChatTitleEntity t = new ChatTitleEntity();
-            t.setSessionId(sessionId);
-            t.setTitle("新对话");
-            t.setMemorySummary(summary);
-            t.setCreateDate(LocalDateTime.now(ZoneId.of("Asia/Shanghai")));
-            t.setUpdateDate(LocalDateTime.now(ZoneId.of("Asia/Shanghai")));
-            titleDao.insert(t);
-        }
-        return Result.ok();
-    }
-
-    /** 读取会话记忆摘要（Python 调用 → 从数据库读） */
-    @GetMapping("/sessions/{sessionId}/memory")
-    public Result<String> getMemory(@PathVariable String sessionId) {
-        ChatTitleEntity existing = titleDao.selectOne(
-                new LambdaQueryWrapper<ChatTitleEntity>().eq(ChatTitleEntity::getSessionId, sessionId));
-        if (existing != null && existing.getMemorySummary() != null && !existing.getMemorySummary().isEmpty()) {
-            return Result.ok(existing.getMemorySummary());
-        }
-        return Result.ok("");
-    }
-
-    /** 聊天记录上报（Python Server 调用，无需认证） */
+    /** 聊天记录上报（Python Server 调用，由 AuthFilter 校验服务身份） */
     @PostMapping("/report")
     public Result<?> report(@RequestBody Map<String, Object> body) {
         String sessionId = (String) body.get("sessionId");

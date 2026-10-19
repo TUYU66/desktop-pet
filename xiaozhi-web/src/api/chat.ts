@@ -1,10 +1,5 @@
 import request from './request';
 
-export function getSessions(roleId?: string) {
-  const params = roleId ? { roleId } : {};
-  return request.get('/chat/sessions', { params });
-}
-
 export function getMessages(sessionId: string, signal?: AbortSignal) {
   return request.get<unknown, ChatResult<ChatMessage[]>>(`/chat/sessions/${encodeURIComponent(sessionId)}/messages`, { signal });
 }
@@ -60,20 +55,12 @@ export function deleteSession(sessionId: string, date?: string) {
   return request.delete(`/chat/sessions/${sessionId}`, { params: date ? { date } : undefined });
 }
 
-export function createSession(roleId: string, roleName: string) {
-  return request.post('/chat/new', { roleId, roleName });
-}
-
 export function getSessionByRole(roleId: string, roleName: string, signal?: AbortSignal) {
   return request.get(`/chat/session-by-role/${roleId}`, { params: { roleName }, signal });
 }
 
 export function sendMessage(text: string, deviceId?: string, sessionId?: string, requestId?: string) {
   return request.post<unknown, ChatResult<ChatRequestReceipt | null>>('/chat/send', { text, deviceId, sessionId, requestId });
-}
-
-export function clearMemory(roleId: string) {
-  return request.delete(`/chat/memory/${roleId}`);
 }
 
 export interface MemoryRecord {

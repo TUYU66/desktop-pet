@@ -193,9 +193,7 @@ public class AuthFilter implements WebFilter {
     private boolean pythonPath(String path,String method) {
         return method.equals("GET")&&path.equals("/xiaozhi/api/user/config")
             || method.equals("GET")&&path.matches("/xiaozhi/api/chat/session-by-role/[A-Za-z0-9_-]{1,128}")
-            || method.equals("GET")&&path.matches("/xiaozhi/api/chat/sessions/[A-Za-z0-9_-]{1,128}/memory")
-            || method.equals("POST")&&Set.of("/xiaozhi/api/chat/report","/xiaozhi/api/chat/title/generate").contains(path)
-            || Set.of("GET","POST").contains(method)&&path.matches("/xiaozhi/api/chat/memory/[A-Za-z0-9_-]{1,128}");
+            || method.equals("POST")&&Set.of("/xiaozhi/api/chat/report","/xiaozhi/api/chat/title/generate").contains(path);
     }
 
     private String extractToken(ServerWebExchange exchange) {

@@ -28,7 +28,6 @@ export const getReminders = (signal?: AbortSignal) => request.get<unknown, { dat
 export const deleteReminderHistory = (item: Reminder) => request.delete(`/reminders/${item.id}`, { params: { version: item.version } });
 export const getReminderDevices = () => request.get('/reminders/devices');
 export const getReminderSettings = (signal?: AbortSignal) => request.get('/reminders/settings', { signal });
-export const saveReminderMusicVolume = (musicVolume: number) => request.put('/reminders/settings', { musicVolume });
 export const saveReminderMusicSettings = (settings: { musicVolume?: number; musicTrackId?: string | null }) => request.put('/reminders/settings', settings);
 export const createReminder = (data: { requestId: string; deviceId: string; title: string; seconds?: number; triggerAt?: number; recurrence?: string }) => request.post<unknown, { data: CreationReceipt }>('/reminders', data);
 export const reminderAction = (item: Reminder, action: 'confirm' | 'snooze' | 'cancel', seconds = 300) =>

@@ -3,7 +3,7 @@
 import json
 import os
 import httpx
-from typing import Optional, List
+from typing import Optional
 from config.logger import setup_logging
 
 TAG = __name__
@@ -215,110 +215,6 @@ async def report_chat_title(
             return resp.json()
     except Exception as e:
         _logger.bind(tag=TAG).error(f"标题上报失败: {e}")
-        return None
-
-
-async def save_memory_summary(
-    session_id: str,
-    summary: str,
-    java_base_url: str = "http://localhost:8000",
-) -> Optional[dict]:
-    """保存记忆摘要到 Java 数据库"""
-    if not session_id or not summary:
-        return None
-    url = f"{java_base_url}/xiaozhi/api/chat/memory/{session_id}"
-    payload = {"summary": summary}
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(url, json=payload, headers=_COMMON_HEADERS)
-            resp.raise_for_status()
-            return resp.json()
-    except Exception as e:
-        _logger.bind(tag=TAG).error(f"保存记忆失败: {e}")
-        return None
-
-
-async def load_memory_summary(
-    session_id: str,
-    java_base_url: str = "http://localhost:8000",
-) -> Optional[str]:
-    """从 Java 数据库加载记忆摘要"""
-    if not session_id:
-        return None
-    url = f"{java_base_url}/xiaozhi/api/chat/sessions/{session_id}/memory"
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(url, headers=_COMMON_HEADERS)
-            if resp.status_code == 200:
-                data = resp.json().get("data")
-                return data if data else ""
-            return ""
-    except Exception as e:
-        _logger.bind(tag=TAG).error(f"加载记忆失败: {e}")
-        return None
-
-
-async def load_role_memories(role_id: str) -> Optional[List[dict]]:
-    """读取当前用户、当前角色的长期记忆。连接失败返回 None，成功但无记录返回空列表。"""
-    role_id = (role_id or "default").strip() or "default"
-    url = f"{_java_base_url()}/xiaozhi/api/memories"
-    try:
-        async with httpx.AsyncClient(timeout=5) as client:
-            resp = await client.get(url, params={"roleId": role_id}, headers=_COMMON_HEADERS)
-            resp.raise_for_status()
-            payload = resp.json()
-            if payload.get("code") != 0:
-                return None
-            data = payload.get("data", [])
-            return data if isinstance(data, list) else []
-    except Exception as e:
-        _logger.bind(tag=TAG).error(f"加载长期记忆失败: {e}")
-        return None
-
-
-async def import_role_memories(
-    role_id: str, session_id: str, memories: List[dict]
-) -> Optional[dict]:
-    """将一轮对话中新提取的长期信息导入 Java 数据库。"""
-    if not memories:
-        return {"created": 0}
-    url = f"{_java_base_url()}/xiaozhi/api/memories/import"
-    payload = {
-        "roleId": (role_id or "default").strip() or "default",
-        "sessionId": session_id or "",
-        "memories": memories,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(url, json=payload, headers=_COMMON_HEADERS)
-            resp.raise_for_status()
-            result = resp.json()
-            return result.get("data") if result.get("code") == 0 else None
-    except Exception as e:
-        _logger.bind(tag=TAG).error(f"导入长期记忆失败: {e}")
-        return None
-
-
-async def apply_memory_operations(
-    role_id: str, session_id: str, operations: List[dict]
-) -> Optional[dict]:
-    """提交本轮记忆新增、更新和删除操作，由 Java 再校验用户及记录归属。"""
-    if not operations:
-        return {"created": 0, "updated": 0, "deleted": 0}
-    url = f"{_java_base_url()}/xiaozhi/api/memories/operations"
-    payload = {
-        "roleId": (role_id or "default").strip() or "default",
-        "sessionId": session_id or "",
-        "operations": operations,
-    }
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.post(url, json=payload, headers=_COMMON_HEADERS)
-            resp.raise_for_status()
-            result = resp.json()
-            return result.get("data") if result.get("code") == 0 else None
-    except Exception as e:
-        _logger.bind(tag=TAG).error(f"应用长期记忆变更失败: {e}")
         return None
 
 

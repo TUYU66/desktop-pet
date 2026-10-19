@@ -17,17 +17,6 @@ public class MemoryFactController {
     public Result<Map<String,Object>> search(@CurrentUser UserEntity user,@RequestBody Map<String,Object> body) {
         if(user==null) return Result.error(401,"未登录");
         try {
-            if(body.containsKey("controlledStage")) {
-                String stage=text(body.get("controlledStage"),12);
-                if(!Set.of("extract","resolve").contains(stage)) throw new IllegalArgumentException("检索阶段无效");
-                List<Long> ids=new ArrayList<>();
-                Object rawIds=body.getOrDefault("ids",List.of());
-                if(!(rawIds instanceof List<?> list)||list.size()>8) throw new IllegalArgumentException("目标最多8项");
-                for(Object id:list) ids.add(integer(id));
-                String queryText=body.containsKey("controlledQuery")&&!"".equals(body.get("controlledQuery"))?text(body.get("controlledQuery"),2400):"";
-                return Result.ok(store.searchControlled(user.getId(),text(body.getOrDefault("roleId","default"),50),
-                    strings(body.get("keys"),32,64),strings(body.get("terms"),12,60),ids,stage,queryText));
-            }
             return Result.ok(store.search(user.getId(),text(body.getOrDefault("roleId","default"),50),
                 strings(body.get("keys"),12,64),strings(body.get("terms"),12,60),Boolean.TRUE.equals(body.get("recall")),Boolean.TRUE.equals(body.get("includeProfile"))));
         } catch(IllegalArgumentException e) { return Result.error(e.getMessage()); }

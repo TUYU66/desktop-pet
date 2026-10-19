@@ -58,9 +58,6 @@ class UnifiedToolHandler:
             # 初始化服务端MCP
             await self.server_mcp_executor.initialize()
 
-            # 初始化Home Assistant（如果需要）
-            self._initialize_home_assistant()
-
             self.finish_init = True
             self.logger.debug("统一工具处理器初始化完成")
 
@@ -70,16 +67,6 @@ class UnifiedToolHandler:
         except Exception as e:
             self.logger.error(f"统一工具处理器初始化失败: {e}")
 
-    def _initialize_home_assistant(self):
-        """初始化Home Assistant提示词"""
-        try:
-            from plugins_func.functions.hass_init import append_devices_to_prompt
-
-            append_devices_to_prompt(self.conn)
-        except ImportError:
-            pass  # 忽略导入错误
-        except Exception as e:
-            self.logger.error(f"初始化Home Assistant失败: {e}")
 
     def get_functions(self) -> List[Dict[str, Any]]:
         """获取所有工具的函数描述"""

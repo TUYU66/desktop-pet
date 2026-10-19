@@ -31,10 +31,6 @@ TAG = __name__
 auto_import_modules("plugins_func.functions")
 
 
-class TTSException(RuntimeError):
-    pass
-
-
 class ConnectionHandler(ConversationEngine):
     def __init__(
             self,
@@ -668,5 +664,3 @@ class ConnectionHandler(ConversationEngine):
             self.logger.bind(tag=TAG).error(f"超时检查任务出错: {e}")
         finally:
             self.logger.bind(tag=TAG).info("超时检查任务已退出")
-
-
