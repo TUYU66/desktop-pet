@@ -4,12 +4,7 @@
 不继承第一阶段的类别判断或意图判断。
 """
 
-from .models import (
-    JsonModel,
-    RecallBatch,
-    UserTurn,
-)
-
+from .models import JsonModel, RecallBatch, UserTurn
 
 
 PROMPT = """
@@ -1070,11 +1065,8 @@ observedAt
 修复或审核语义结果。
 """
 
-async def decide(
-    model: JsonModel,
-    turn: UserTurn,
-    batch: RecallBatch,
-):
+
+async def decide(model: JsonModel, turn: UserTurn, batch: RecallBatch):
 
     return await model.ask(
         "decision",
@@ -1082,9 +1074,7 @@ async def decide(
         {
             "latestUser": turn.latest_user,
             "referenceTime": turn.observed_at,
-            "relatedMemories": list(
-                batch.records
-            ),
+            "relatedMemories": list(batch.records),
             "omittedMemoryCount": batch.omitted,
         },
         3200,

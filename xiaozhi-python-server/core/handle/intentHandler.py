@@ -9,7 +9,7 @@ from core.utils.dialogue import Message
 from core.providers.tts.dto.dto import ContentType
 from core.handle.helloHandle import checkWakeupWords
 from plugins_func.register import Action, ActionResponse
-from core.handle.reportHandle import enqueue_tool_report
+from core.reporting.chat_reports import enqueue_tool_report
 from core.utils.util import remove_punctuation_and_length
 from core.device.chassis_intent import TURN_TOOL_NAMES
 from core.providers.tts.dto.dto import TTSMessageDTO, SentenceType
@@ -156,7 +156,7 @@ async def process_intent_result(
             # 使用executor执行函数调用和结果处理
             def process_function_call():
                 conn.dialogue.put(Message(role="user", content=original_text))
-                
+
                 # 工具调用超时时间
                 tool_call_timeout = int(conn.config.get("tool_call_timeout", 30))
                 # 使用统一工具处理器处理所有工具调用

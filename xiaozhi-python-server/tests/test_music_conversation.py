@@ -98,7 +98,7 @@ class MusicConsentTests(unittest.IsolatedAsyncioTestCase):
         conn = SimpleNamespace(local_music=music, session_id='session', chat_lock=threading.Lock())
         async def pause_audio(conn, for_chat=True): music.state = 'paused'
         with patch('core.music.conversation.pause_for_chat', side_effect=pause_audio), \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()), \
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()), \
                 patch('core.music.conversation.say', new_callable=AsyncMock):
             handled, answer = await handle_input(conn, '随机播放我的红心歌单', web=True)
         self.assertTrue(handled)
@@ -113,7 +113,7 @@ class MusicConsentTests(unittest.IsolatedAsyncioTestCase):
         conn = SimpleNamespace(local_music=music, session_id='session', chat_lock=threading.Lock())
         async def pause_audio(conn, for_chat=True): music.state = 'paused'
         with patch('core.music.conversation.pause_for_chat', side_effect=pause_audio), \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()), \
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()), \
                 patch('core.music.conversation.say', new_callable=AsyncMock):
             handled, answer = await handle_input(conn, '播放我的收藏歌单', web=True)
         self.assertTrue(handled)
@@ -143,7 +143,7 @@ class MusicConsentTests(unittest.IsolatedAsyncioTestCase):
         conn = SimpleNamespace(local_music=music, session_id='session', chat_lock=threading.Lock())
         async def pause(conn, for_chat=True): music.state = 'paused'
         with patch('core.music.conversation.pause_for_chat', side_effect=pause), \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()), \
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()), \
                 patch('core.music.conversation.say', new_callable=AsyncMock):
             handled, answer = await handle_input(conn, '单曲循环', web=True)
         self.assertTrue(handled)
@@ -155,8 +155,8 @@ class MusicConsentTests(unittest.IsolatedAsyncioTestCase):
     async def test_voice_chat_still_requires_confirmation(self):
         music = SimpleNamespace(state='playing', command=AsyncMock(), interrupted_for_chat=False)
         conn = SimpleNamespace(local_music=music, session_id='session')
-        with patch('core.handle.reportHandle.enqueue_asr_report', Mock()), \
-                patch('core.handle.reportHandle.enqueue_tts_report', Mock()), \
+        with patch('core.reporting.chat_reports.enqueue_asr_report', Mock()), \
+                patch('core.reporting.chat_reports.enqueue_tts_report', Mock()), \
                 patch('core.music.conversation.say', new_callable=AsyncMock):
             handled, answer = await handle_input(conn, '聊聊今天的事情')
             self.assertTrue(handled)
@@ -173,8 +173,8 @@ class MusicConsentTests(unittest.IsolatedAsyncioTestCase):
         async def pause_audio(conn, for_chat=True):
             conn.local_music.state = 'paused'
         with patch('core.music.conversation.pause_for_chat', side_effect=pause_audio) as pause, \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()) as asr, \
-                patch('core.handle.reportHandle.enqueue_tts_report', Mock()) as tts:
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()) as asr, \
+                patch('core.reporting.chat_reports.enqueue_tts_report', Mock()) as tts:
             handled, routed = await handle_input(conn, '聊聊今天的事情', web=True)
         self.assertFalse(handled)
         self.assertEqual(routed, '聊聊今天的事情')
@@ -210,8 +210,8 @@ class MusicConsentTests(unittest.IsolatedAsyncioTestCase):
         music = SimpleNamespace(state='playing', command=AsyncMock())
         conn = SimpleNamespace(local_music=music, session_id='session', sentence_id='music-stream', headers={})
         with patch('core.music.conversation.pause_for_chat', new_callable=AsyncMock) as pause, \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()), \
-                patch('core.handle.reportHandle.enqueue_tts_report', Mock()):
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()), \
+                patch('core.reporting.chat_reports.enqueue_tts_report', Mock()):
             handled, _ = await handle_input(conn, '不要暂停音乐', web=True)
         self.assertTrue(handled)
         pause.assert_not_awaited()

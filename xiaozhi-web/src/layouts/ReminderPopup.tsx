@@ -1,22 +1,25 @@
+import useServerClock from '../hooks/useServerClock';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, App, Button, Modal, Space, Tag } from 'antd';
 import { ClockCircleOutlined } from '@ant-design/icons';
-import { reminderAction } from '../api/reminder';
+import { reminderAction, reminderPresented } from '../api/reminder';
 import type { Reminder, ReminderPage } from '../api/reminder';
-import { canConfirmPopup, popupKey, reconcilePopup } from './reminderPopupState';
+import { canConfirmPopup, needsReminderAction, reminderPhase, popupKey, reconcilePopup } from './reminderPopupState';
 
 const timeLabel = (value: number) => new Date(value).toLocaleString('zh-CN', {
   timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
 });
 const stateLabel: Partial<Record<Reminder['status'], string>> = {
   scheduled: '等待设备提醒', dispatching: '正在播报', awaiting_confirmation: '等你回应',
-  delivery_unknown: '还没确认是否收到', retry_pending: '还没收到回应', expired: '已逾期', missed: '还没收到回应',
+  delivery_unknown: '还没确认是否收到', retry_pending: '还没收到回应', expired: '已逾期', missed: '已逾期',
 };
 
 export default function ReminderPopup({ page }: { page: ReminderPage | null }) {
   const [items, setItems] = useState<Reminder[]>([]);
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const now = useServerClock(page?.serverNow);
+  const presenting = useRef(new Set<string>());
   const dismissed = useRef(new Set<string>());
   const lock = useRef(false);
   const alive = useRef(false);
@@ -29,6 +32,30 @@ export default function ReminderPopup({ page }: { page: ReminderPage | null }) {
       setItems(previous => reconcilePopup(previous, page, dismissed.current));
     }
   }, [page]);
+
+  useEffect(() => {
+    const show = () => { if (page) setItems(page.items.filter(item => needsReminderAction(item) && item.dueAt <= page.serverNow)); };
+    window.addEventListener('xiaozhi:open-reminders', show);
+    return () => window.removeEventListener('xiaozhi:open-reminders', show);
+  }, [page]);
+  useEffect(() => {
+    if (document.hidden) return;
+    if (items.every(item => !['scheduled', 'dispatching'].includes(item.status)))
+      setError(previous => previous.startsWith('提醒计时') ? '' : previous);
+    for (const item of items) {
+      const key = popupKey(item);
+      if (!['scheduled', 'dispatching'].includes(item.status) || presenting.current.has(key)) continue;
+      presenting.current.add(key);
+      // Presentation is idempotent for this dueAt; it never restarts a round.
+      void reminderPresented(item).then(result => {
+        const saved = result.data as Reminder;
+        if (!saved || saved.id !== item.id || saved.dueAt !== item.dueAt) throw new Error('提醒轮次已变化');
+        if (alive.current) setItems(previous => previous.map(row => popupKey(row) === key ? saved : row));
+        window.dispatchEvent(new Event('xiaozhi:reminders-state'));
+      }).catch(() => { if (alive.current) setError('提醒计时尚未核实，请刷新日程状态；仍可尝试回应。'); })
+        .finally(() => presenting.current.delete(key));
+    }
+  }, [items]);
 
   const dismiss = () => {
     if (lock.current) return;
@@ -46,7 +73,7 @@ export default function ReminderPopup({ page }: { page: ReminderPage | null }) {
         try {
           const result = await reminderAction(item, action, 300);
           const saved = result.data as Reminder | undefined;
-          if (!saved || saved.id !== item.id || !Number.isInteger(saved.version) || saved.version <= item.version
+          if (!saved || saved.id !== item.id || !Number.isInteger(saved.version) || saved.version < item.version
             || saved.status !== (action === 'confirm' ? 'completed' : 'scheduled')
             || (action === 'snooze' && (!Number.isFinite(saved.dueAt) || saved.dueAt <= item.dueAt))) {
             throw new Error('操作回执未确认，请核实日程记录');
@@ -68,16 +95,19 @@ export default function ReminderPopup({ page }: { page: ReminderPage | null }) {
     } finally { lock.current = false; if (alive.current) setWorking(null); }
   };
   return <Modal open={items.length > 0} title={<Space><ClockCircleOutlined />{items.length > 1 ? '有几件事到时间了' : '提醒你一件事'}</Space>}
-    onCancel={dismiss} maskClosable={false} keyboard={!working} closable={!working} width={560}
-    footer={<Space wrap><Button disabled={!!working} onClick={dismiss}>稍后处理</Button>
+    onCancel={dismiss} mask={{ closable: false }} keyboard={!working} closable={!working} width={560}
+    footer={<Space wrap><Button disabled={!!working} onClick={dismiss}>关闭弹窗</Button>
+      {items.length > 1 && <Button disabled={!!working} onClick={() => void act(items, 'snooze')}>全部延后 5 分钟</Button>}
       {items.length > 1 && <Button type="primary" loading={working === 'all'}
         disabled={!!working || items.some(item => !canConfirmPopup(item))} onClick={() => void act(items, 'confirm')}>都收到了</Button>}</Space>}>
-    <p style={{ color: '#66758c' }}>可以在这里确认，或唤醒后说“收到”。关闭弹窗会保留未确认状态。</p>
+    <p style={{ color: '#66758c' }}>可以在这里确认，或唤醒后说“收到”。每轮通知 45 秒，未回应后间隔 5 分钟再提醒，最多三轮。关闭弹窗不算回应。</p>
     {error && <Alert type="warning" showIcon title={error} style={{ marginBottom: 12 }} />}
     <div style={{ maxHeight: '55vh', overflowY: 'auto' }}>
       {items.map(item => <section key={popupKey(item)} style={{ padding: '16px 0', borderBottom: '1px solid #edf0f6' }}>
         <Space wrap style={{ marginBottom: 8 }}><Tag color={item.status === 'dispatching' ? 'processing' : 'gold'}>{stateLabel[item.status] || '待确认'}</Tag>
           <span style={{ color: '#66758c', fontSize: 13 }}>{timeLabel(item.scheduledAt || item.originalDueAt || item.dueAt)}（北京时间）</span></Space>
+        <p className="reminder-phase" role="status">{reminderPhase(item, now)}</p>
+        {item.lastError && <p style={{ color: '#787671', fontSize: 12 }}>通知状态：{item.lastError}</p>}
         <p style={{ margin: '0 0 12px', fontSize: 17, overflowWrap: 'anywhere' }}>{item.title}</p>
         <Space wrap><Button type="primary" loading={working === item.id} disabled={!!working || !canConfirmPopup(item)} onClick={() => void act([item], 'confirm')}>收到了</Button>
           <Button disabled={!!working || !canConfirmPopup(item)} onClick={() => void act([item], 'snooze')}>5分钟后再提醒</Button>

@@ -778,8 +778,8 @@ class OnlineSearchReplyTests(unittest.IsolatedAsyncioTestCase):
         with patch('core.music.conversation.player', return_value=music), \
                 patch('core.music.conversation.pause_for_chat', new_callable=AsyncMock), \
                 patch('core.music.conversation.say', new_callable=AsyncMock), \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()), \
-                patch('core.handle.reportHandle.enqueue_tts_report', Mock()):
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()), \
+                patch('core.reporting.chat_reports.enqueue_tts_report', Mock()):
             handled, answer = await handle_input(conn, '网易云搜索周杰伦的晴天', web=True)
         self.assertTrue(handled)
         self.assertIn('周杰伦的晴天', answer)

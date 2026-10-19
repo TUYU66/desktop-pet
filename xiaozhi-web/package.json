@@ -7,13 +7,16 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --test tests/*.test.ts tests/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
+    "@gsap/react": "^2.1.2",
     "antd": "^6.4.5",
     "axios": "^1.18.1",
     "dayjs": "^1.11.21",
+    "gsap": "^3.15.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "react-router-dom": "^7.18.0",

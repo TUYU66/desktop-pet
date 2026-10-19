@@ -16,9 +16,10 @@ from abc import ABC, abstractmethod
 from config.logger import setup_logging
 from core.providers.asr.dto.dto import InterfaceType
 from core.handle.receiveAudioHandle import startToChat
-from core.handle.reportHandle import enqueue_asr_report
+from core.reporting.chat_reports import enqueue_asr_report
 from core.utils.util import remove_punctuation_and_length
 from core.handle.receiveAudioHandle import handleAudioMessage
+from core.utils.voice_diagnostics import count as count_voice
 from typing import Optional, Tuple, List, NamedTuple, TYPE_CHECKING
 
 
@@ -89,6 +90,7 @@ class ASRProviderBase(ABC):
 
     def queue_utterance(self, conn, audio):
         """Bound complete utterances separately from microphone/VAD processing."""
+        count_voice(conn, 'queued')
         if not hasattr(conn, '_asr_utterances'):
             conn._asr_utterances = asyncio.Queue(maxsize=2)
         queue_ = conn._asr_utterances
@@ -107,6 +109,7 @@ class ASRProviderBase(ABC):
             try:
                 await asyncio.wait_for(self.handle_voice_stop(conn, audio), timeout=30)
             except asyncio.TimeoutError:
+                count_voice(conn, 'asr_timeout')
                 logger.bind(tag=TAG).warning('语音识别超过30秒，已取消本段')
                 if generation == getattr(conn, 'input_generation', 0) and not conn.stop_event.is_set():
                     try:
@@ -129,6 +132,7 @@ class ASRProviderBase(ABC):
         generation = getattr(conn, 'input_generation', 0)
         session = conn.session_id
         try:
+            count_voice(conn, 'asr_start')
             total_start_time = time.monotonic()
             await self._send_recognition_state(conn, "start")
 
@@ -138,6 +142,7 @@ class ASRProviderBase(ABC):
             asr_result = await asr_task
             if (generation != getattr(conn, 'input_generation', 0) or session != conn.session_id
                     or conn.stop_event.is_set() or getattr(conn, 'standby', False)):
+                count_voice(conn, 'asr_stale')
                 return
 
             if isinstance(asr_result, Exception):
@@ -170,11 +175,13 @@ class ASRProviderBase(ABC):
             self.stop_ws_connection()
 
             if text_len > 0:
+                count_voice(conn, 'asr_text')
                 audio_snapshot = asr_audio_task.copy()
                 enqueue_asr_report(conn, enhanced_text, audio_snapshot)
                 # 使用自定义模块进行上报
                 await startToChat(conn, enhanced_text)
             else:
+                count_voice(conn, 'asr_empty')
                 await self._send_recognition_state(conn, "empty")
         except Exception as e:
             logger.bind(tag=TAG).error(f"处理语音停止失败: {e}")

@@ -6,9 +6,10 @@ import { getBotConfig } from '../../api/user';
 import { getSessionByRole } from '../../api/chat';
 import request, { ApiError } from '../../api/request';
 import dayjs from 'dayjs';
-import SpotlightPanel from '../../components/SpotlightPanel';
 import './dashboard-effects.css';
 import DevicePanel from './DevicePanel';
+import { startPolling } from '../../utils/polling';
+import CompanionCard from '../../components/motion/CompanionCard';
 
 type PreviewMessage = { id: number; content: string; chatType: string; createDate: string };
 type PreviewPage = { items: unknown[]; nextBeforeCursor?: string | null; hasMoreBefore: boolean };
@@ -87,28 +88,32 @@ export default function Dashboard() {
   const pagingUnavailable = useRef(false);
   const [online, setOnline] = useState<boolean | null>(null);
 
-  const load = useCallback(async (refreshRequested = false) => {
-    if (!mounted.current || document.hidden) return;
-    if (fetching.current) { if (refreshRequested) refreshQueued.current = true;return; }
+  const load = useCallback(async (refreshRequested = false, signal?: AbortSignal) => {
+    if (!mounted.current || document.hidden || signal?.aborted) return;
+    if (fetching.current && !controller.current?.signal.aborted) { if (refreshRequested) refreshQueued.current = true;return; }
     if (refreshRequested) pagingUnavailable.current = false;
     fetching.current = true;
     setRefreshing(true);
     const token = generation.current;
-    const isCurrent = () => mounted.current && generation.current === token && !document.hidden;
+    const isCurrent = () => mounted.current && generation.current === token && !document.hidden && !abort.signal.aborted;
     const abort = new AbortController();
     controller.current = abort;
+    const cancel = () => abort.abort();
+    signal?.addEventListener('abort', cancel, { once: true });
+    let statusSucceeded = true;
+    let previewSucceeded = true;
     const statusTask = request.get('/chat/active-sessions', { signal: abort.signal }).then(
       response => {
         if (!isCurrent()) return;
-        if (!Array.isArray(response.data)) { setOnline(null);setError(true);return; }
+        if (!Array.isArray(response.data)) { statusSucceeded = false;setOnline(null);setError(true);return; }
         setOnline(response.data.length > 0);
         setError(false);
       },
-      () => { if (isCurrent()) { setOnline(null);setError(true); } },
+      () => { statusSucceeded = false;if (isCurrent()) { setOnline(null);setError(true); } },
     );
     try {
       if (pagingUnavailable.current) throw new PreviewPagingUnavailable();
-      const c = await getBotConfig();
+      const c = await getBotConfig(abort.signal);
       if (!isCurrent()) return;
       const config = c.data;
       if (!config || typeof config !== 'object') throw new Error('角色配置未完整返回');
@@ -116,7 +121,7 @@ export default function Dashboard() {
       if (!Array.isArray(roles) || roles.some(r => !r || typeof r !== 'object')) throw new Error('角色配置格式错误');
       const currentRole = roles.find((r: { id: string }) => r.id === config.activeRole) || roles[0] || config;
       const name = typeof currentRole.name === 'string' && currentRole.name.trim() ? currentRole.name.trim() : '桌面宠物';
-      const session = await getSessionByRole(currentRole.id || config.activeRole || 'default', name);
+      const session = await getSessionByRole(currentRole.id || config.activeRole || 'default', name, abort.signal);
       if (!isCurrent()) return;
       if (typeof session.data?.sessionId !== 'string' || !session.data.sessionId.trim()) throw new Error('无法读取当前对话');
       const records = await recentPreview(session.data.sessionId, isCurrent, abort.signal);
@@ -125,6 +130,7 @@ export default function Dashboard() {
       setMessages(records);
       setChatError('');
     } catch (error) {
+      previewSucceeded = error instanceof PreviewPagingUnavailable;
       if (isCurrent()) {
         if (error instanceof PreviewPagingUnavailable) pagingUnavailable.current = true;
         setChatError(error instanceof Error ? error.message : '聊天记录读取失败，请检查服务连接后刷新。');
@@ -132,46 +138,54 @@ export default function Dashboard() {
     } finally {
       if (isCurrent()) setLoading(false);
       await statusTask;
-      fetching.current = false;
-      if (controller.current === abort) controller.current = null;
-      if (isCurrent()) setRefreshing(false);
-      if (refreshQueued.current && mounted.current && !document.hidden) {
-        refreshQueued.current = false;
-        void load(true);
+      signal?.removeEventListener('abort', cancel);
+      if (controller.current === abort) {
+        fetching.current = false;
+        if (isCurrent()) setRefreshing(false);
+        controller.current = null;
+        if (refreshQueued.current && mounted.current && !document.hidden) {
+          refreshQueued.current = false;
+          void load(true);
+        }
       }
     }
+    return statusSucceeded && previewSucceeded;
   }, []);
 
   useEffect(() => {
     mounted.current = true;
     ++generation.current;
-    void load(true);
-    const timer = window.setInterval(() => { if (!document.hidden) void load(); }, 15000);
     const visible = () => {
       ++generation.current;
       controller.current?.abort();
       setOnline(null);
-      if (!document.hidden) void load(true);
     };
     document.addEventListener('visibilitychange', visible);
+    let first = true;
+    const polling = startPolling(signal => {
+      const initial = first; first = false;
+      return load(initial, signal);
+    }, { interval: 15000, maxInterval: 60000 });
     return () => {
-      mounted.current = false;
-      ++generation.current;
-      refreshQueued.current = false;
-      controller.current?.abort();
-      window.clearInterval(timer);
+      mounted.current = false; ++generation.current; refreshQueued.current = false;
+      polling.stop(); controller.current?.abort();
       document.removeEventListener('visibilitychange', visible);
     };
   }, [load]);
   if (loading) return <Spin />;
 
-  return <div className="overview page-width tech-overview effects-on">
+  return <div className="overview page-width companion-overview">
     <div className="page-heading"><div><h1>桌面宠物</h1><p>查看连接状态，接着上次的话题聊。</p></div><div className="overview-actions"><Button icon={<ReloadOutlined />} loading={refreshing} onClick={() => void load(true)}>刷新</Button></div></div>
     {error && <Alert type="warning" showIcon title="设备状态暂时无法更新" description="连接状态可能不是最新状态，聊天记录独立加载。" />}
-    <SpotlightPanel enabled>
-      <div className="tech-copy"><Tag color={online ? 'cyan' : 'default'}>{online === null ? '连接状态未知' : online ? '设备已连接' : '设备未连接'}</Tag><h2>{role.name || '桌面宠物'}<span>你的桌面伙伴</span></h2><p>把文字留在这里，让声音陪在身边。</p><div className="tech-links"><Link className="primary-link" to="/chat">开始对话</Link><Link className="secondary-link" to="/settings">调整角色</Link></div><div className="hero-details"><span>语音与文字对话</span><span>历史记录随时回看</span></div></div>
-      <div className="robot-stage" aria-hidden="true"><div className="stage-orbit orbit-back" /><div className="stage-orbit orbit-front" /><div className="robot-frame"><div className="border-tracer" /><div className="robot-shell"><div className="robot-display"><i /><i /><span /></div><div className="robot-chin"><b /><b /><b /><b /><b /></div></div></div><div className="stage-plinth" /></div>
-    </SpotlightPanel>
+    <CompanionCard>
+      <div className="companion-copy">
+        <Tag color={online ? 'success' : 'default'}>{online === null ? '连接状态待确认' : online ? '设备已连接' : '设备未连接'}</Tag>
+        <h2>和{role.name || '小兰'}的一天</h2>
+        <p>说说今天的小事，或者一起安排接下来的日常。</p>
+        <div className="companion-links"><Link className="primary-link" to="/chat">开始对话</Link><Link className="secondary-link" to="/memory">看看我们的记忆</Link></div>
+      </div>
+      <div className="companion-portrait" aria-hidden="true"><span className="companion-doodle doodle-message">聊聊今天</span><span className="companion-doodle doodle-music">♪</span><span className="companion-spark">✳</span><div className="companion-face"><i /><i /><span /></div><span className="companion-caption">你的桌面伙伴</span></div>
+    </CompanionCard>
     <DevicePanel />
     <section className="surface recent-conversations"><div className="section-heading"><h2>最近对话</h2><Link to="/chat">查看全部记录</Link></div>{chatError && <Alert type="warning" showIcon title="聊天记录更新失败" description={`${chatError}${messages.length ? ' 下方保留上次读取的预览，尚未更新。' : ' 暂时无法确认当前聊天记录。'}`} />}{messages.length ? <div className="recent-message-list">{messages.map(m => <article className="recent-message" key={m.id}><span className="preview-speaker">{m.chatType === '1' || m.chatType === 'user' ? '我' : role.name || '桌面宠物'}</span><p className="preview-message">{m.content.replace(/^🔔 /, '')}</p><time dateTime={m.createDate}>{dayjs(m.createDate).format('M月D日 HH:mm')}</time></article>)}</div> : <p className="empty-copy">{chatError ? '暂时无法读取聊天记录。' : `还没有对话记录。和${role.name || '桌面宠物'}聊几句后，再来这里回看。`}</p>}</section>
   </div>;

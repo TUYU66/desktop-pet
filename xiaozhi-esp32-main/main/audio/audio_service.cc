@@ -670,7 +670,7 @@ void AudioService::SetCallbacks(AudioServiceCallbacks& callbacks) {
     callbacks_ = callbacks;
 }
 
-void AudioService::PlaySound(const std::string_view& ogg) {
+void AudioService::PlaySound(const std::string_view& ogg, std::function<bool()> continue_playing) {
     // 内置提示音是 OGG/Opus 数据，复用与服务器下行语音相同的解码播放链路。
     if (!codec_->output_enabled()) {
         esp_timer_stop(audio_power_timer_);
@@ -682,7 +682,9 @@ void AudioService::PlaySound(const std::string_view& ogg) {
     size_t size = ogg.size();
 
     auto demuxer = std::make_unique<OggDemuxer>();
-    demuxer->OnDemuxerFinished([this](const uint8_t* data, int sample_rate, size_t size){
+    const auto epoch = GetPlaybackEpoch();
+    demuxer->OnDemuxerFinished([this, epoch, continue_playing](const uint8_t* data, int sample_rate, size_t size){
+        if (GetPlaybackEpoch() != epoch || (continue_playing && !continue_playing())) return;
         auto packet = std::make_unique<AudioStreamPacket>();
         packet->sample_rate = sample_rate;
         packet->frame_duration = 60;
@@ -732,6 +734,11 @@ void AudioService::ResetDecoder() {
     audio_playback_queue_.clear();
     audio_testing_queue_.clear();
     audio_queue_cv_.notify_all();
+}
+
+uint32_t AudioService::GetPlaybackEpoch() {
+    std::lock_guard<std::mutex> lock(audio_queue_mutex_);
+    return decode_epoch_;
 }
 
 void AudioService::CheckAndUpdateAudioPowerState() {

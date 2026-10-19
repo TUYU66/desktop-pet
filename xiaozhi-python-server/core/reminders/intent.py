@@ -17,7 +17,7 @@ recentReminders是最近实际提及的提醒，优先用它理解“这两条�
 输入可能只包含部分记录；数量不匹配或recentReminders不完整时，不得把“全部”缩成显示出来的几条。
 可以同时选定用户明确点名的多个事项，不扩大到未提及的项目。
 仅有一条提醒时，明确的回应可以指向它；所有id只能来自reminders。
-本接口的snooze只支持单条；多条不同操作或不同改期要求返回ambiguous，不得确认其中任何一条。"""
+明确将多条提醒统一延后时可以使用snooze和targetIds；多条不同操作或不同改期要求返回ambiguous，不得确认其中任何一条。"""
 
 
 async def classify(conn, text, items, total=None):
@@ -42,13 +42,13 @@ async def classify(conn, text, items, total=None):
         allowed={x['id'] for x in items}
         if not isinstance(ids,list): raise ValueError('invalid_reminder_targets')
         if ids:
-            if (value['action']!='confirm' or not isinstance(ids,list) or len(ids)>len(allowed)
+            if (not isinstance(ids,list) or len(ids)>len(allowed)
                     or any(not isinstance(x,str) or x not in allowed for x in ids)
                     or len(set(ids))!=len(ids) or value.get('targetId') is not None):
                 raise ValueError('invalid_reminder_targets')
         elif not isinstance(value.get('targetId'),str) or value['targetId'] not in allowed:
             raise ValueError('invalid_reminder_target')
-        if (value['action']=='confirm' and re.search(r'都|全部|全都',text)
+        if (value['action'] in ('confirm','snooze') and re.search(r'都|全部|全都',text)
                 and not any(x['title'] in text for x in items)):
             # A generic "all" must cover the referenced group, never a model-picked subset.
             global_scope=bool(re.search(r'所有(?:未确认的|没确认的)?提醒|全部(?:未确认的|没确认的)提醒',text))

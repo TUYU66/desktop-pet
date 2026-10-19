@@ -1,5 +1,7 @@
 # STM32 平衡车工程
 
+> 维护说明（2026-10-18）：下文保留串口协议与调试背景，早期“后续阶段”、参数和未验收描述不代表当前状态。蓝牙 App 的现行进入/退出流程见 Android App 配套说明（App 源码不在本次公开范围内），实际控制和参数以当前 Keil 工程源码为准。
+
 Keil 工程：`Balance_Car_KEil_HAL/MDK-ARM/Balance_Car_KEil_HAL.uvprojx`。
 
 ## 当前编译范围

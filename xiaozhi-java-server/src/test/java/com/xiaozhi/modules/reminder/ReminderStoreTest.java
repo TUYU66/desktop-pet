@@ -72,11 +72,11 @@ class ReminderStoreTest {
         assertThrows(ReminderStore.Conflict.class,()->store.act(7,"id",2,"cancel",0,2000));
         verify(jdbc,never()).update(anyString(),any(Object[].class));
     }
-    @Test void confirmationAndSnoozeRequireDeliveredOrUnknownState() {
+    @Test void futureReminderCannotBeConfirmedOrSnoozedEarly() {
         JdbcTemplate jdbc=mock(JdbcTemplate.class); var store=new ReminderStore(jdbc);
         when(jdbc.query(anyString(),any(RowMapper.class),eq(7L),eq("id"))).thenReturn(List.of(item("scheduled",2)));
-        assertThrows(ReminderStore.Conflict.class,()->store.act(7,"id",2,"confirm",0,2000));
-        assertThrows(ReminderStore.Conflict.class,()->store.act(7,"id",2,"snooze",300,2000));
+        assertThrows(ReminderStore.Conflict.class,()->store.act(7,"id",2,"confirm",0,999));
+        assertThrows(ReminderStore.Conflict.class,()->store.act(7,"id",2,"snooze",300,999));
     }
     @Test void snoozeUsesServerTimeAndCompareAndSwap() {
         JdbcTemplate jdbc=mock(JdbcTemplate.class); var store=new ReminderStore(jdbc);
@@ -88,21 +88,21 @@ class ReminderStoreTest {
     @Test void staleDispatchReceiptCannotOverwriteNewAttempt() {
         JdbcTemplate jdbc=mock(JdbcTemplate.class); var store=new ReminderStore(jdbc);
         store.finish(item("scheduled",2),"attempt","sent",null,2000);
-        verify(jdbc).update(contains("task_id IS NULL AND status='dispatching' AND attempt_id=?"),eq("awaiting_confirmation"),isNull(),eq(17000L),eq(2000L),eq(62000L),eq(1),eq("id"),eq("attempt"));
+        verify(jdbc,never()).update(anyString(),any(Object[].class));
     }
     @Test void recoveryMarksUncertainAndExpiresOverdueWithoutResending() {
         JdbcTemplate jdbc=mock(JdbcTemplate.class); var store=new ReminderStore(jdbc);
         when(jdbc.query(anyString(),any(RowMapper.class),eq(2_000_000L),eq(2_000_000L))).thenReturn(List.of());
         store.due(2_000_000);
         verify(jdbc).update(contains("status='delivery_unknown'"),eq(2_000_000L),eq(1_760_000L));
-        verify(jdbc).update(contains("status='expired'"),eq(2_000_000L),eq(2_000_000L));
+        verify(jdbc).update(contains("到期后一直未成功送达"),eq(2_000_000L),eq(2_000_000L));
     }
     @Test void dueQueryIncludesOverlappingRemindersButNeverFutureAppointments() {
         var jdbc=mock(JdbcTemplate.class); var store=new ReminderStore(jdbc);
         store.due(2_000_000);
         verify(jdbc).query(argThat(sql->sql.contains("r.next_attempt_at<=?")&&sql.contains("r.expires_at>?")
             &&sql.contains("r.history_deleted=false")&&!sql.contains("NOT EXISTS")
-            &&sql.contains("ORDER BY r.next_attempt_at,r.id")),any(RowMapper.class),eq(2_000_000L),eq(2_000_000L));
+            &&sql.contains("ORDER BY r.next_attempt_at,r.id")),any(RowMapper.class),eq(2_000_000L),eq(2_000_000L),eq(2_000_000L));
     }
     @Test void replayedCreateReturnsExistingWithoutInserting() {
         JdbcTemplate jdbc=mock(JdbcTemplate.class); var store=new ReminderStore(jdbc);

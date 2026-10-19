@@ -8,12 +8,12 @@ export function updatePassword(currentPassword: string, newPassword: string) {
   return request.put('/user/password', { currentPassword, newPassword });
 }
 
-export function getBotConfig() {
-  return request.get('/user/config');
+export function getBotConfig(signal?: AbortSignal) {
+  return request.get('/user/config', { signal });
 }
 
-export function getWakeWordStatus() {
-  return request.get('/user/wake-word-status');
+export function getWakeWordStatus(signal?: AbortSignal) {
+  return request.get('/user/wake-word-status', { signal });
 }
 
 export function saveBotConfig(data: Record<string, string>) {

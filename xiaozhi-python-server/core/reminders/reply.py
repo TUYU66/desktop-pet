@@ -5,7 +5,7 @@ import time
 from core.reminders import client as reminder_client
 from core.reminders.parser import number
 
-CONFIRMABLE={'awaiting_confirmation','retry_pending','delivery_unknown','missed','expired'}
+CONFIRMABLE={'dispatching','awaiting_confirmation','retry_pending','delivery_unknown','missed','expired'}
 ALL_ACK=re.compile(
     r'(?:好的?|嗯)?(?:我)?(?:刚才的?|刚刚的?|这|那)?'
     r'(?:(?P<count>[一二两三四五六七八九十百0-9]+)(?:条|个|件)(?:提醒|事情|事)?|'
@@ -60,7 +60,7 @@ def resolve_all(conn, text, eligible, unanswered_count):
     return dict(action='confirm',targetIds=targets)
 
 
-async def confirm_group(conn, device, selected):
+async def confirm_group(conn, device, selected, *, action='confirm', trigger_at=None):
     generation=getattr(conn,'input_generation',0)
     session=getattr(conn,'session_id',None)
     outcomes={}
@@ -73,10 +73,12 @@ async def confirm_group(conn, device, selected):
             if not current(): return
             try:
                 result=await asyncio.wait_for(reminder_client.command(device,
-                    dict(action='confirm',id=item['id'],version=item['version'])),5)
+                    dict(action=action,id=item['id'],version=item['version'],**({'triggerAt':trigger_at} if trigger_at is not None else {'seconds':300} if action=='snooze' else {}))),5)
                 if (not isinstance(result,dict) or result.get('id')!=item['id']
-                        or result.get('status')!='completed' or result.get('version',-1)<=item['version']):
-                    raise ValueError('提醒确认回执不匹配')
+                        or result.get('status')!=('completed' if action=='confirm' else 'scheduled') or result.get('version',-1)<=item['version']):
+                    raise ValueError('提醒操作回执不匹配')
+                if action=='snooze' and (not result.get('dueAt') or trigger_at is not None and result['dueAt']!=trigger_at):
+                    raise ValueError('延后时间回执不匹配')
                 outcomes[item['id']]=True
             except Exception as exc:
                 outcomes[item['id']]=False
@@ -97,8 +99,22 @@ async def confirm_group(conn, device, selected):
             conn.reminder_reply_context=None
             conn.schedule_pending=None
         amount={1:'这条',2:'这两条',3:'这三条',4:'这四条'}.get(len(confirmed),f'这{len(confirmed)}条')
+        if action=='snooze':
+            return f'好，{amount}提醒都重新安排好了。' if trigger_at is not None else f'好，{amount}提醒都延后五分钟。'
         return f'好，{amount}提醒都记为收到了。' if len(confirmed)>1 else '好，这条提醒记为收到了。'
     def titles(rows):
         return '、'.join('“'+x['title'][:36]+'”' for x in rows[:4])+('等提醒' if len(rows)>4 else '')
-    prefix=titles(confirmed)+'已经记为收到了；' if confirmed else ''
-    return prefix+titles(unknown)+'有没有记为收到，我还没确认，你先在日程页面看一下吧。'
+    prefix=titles(confirmed)+('已经记为收到了；' if action=='confirm' else '已经重新安排好了；') if confirmed else ''
+    detail='有没有记为收到，我还没确认，你先在日程页面看一下吧。' if action=='confirm' else '延后有没有保存成功，我还没确认，你先在日程页面看一下吧。'
+    return prefix+titles(unknown)+detail
+
+
+def resolve_all_snooze(conn, text, eligible, total):
+    # Restrict the fast path to an explicit group and the agreed five-minute snooze.
+    compact=re.sub(r'\s+','',text).strip(' 。！!，,')
+    match=re.fullmatch(r'(?:把)?(?P<scope>(?:这|那)?[一二两三四五六七八九十0-9]+(?:条|个|件)(?:提醒)?|全部(?:提醒)?|所有提醒|这些(?:提醒)?|都)(?:都|一起|一并)?(?:延后|推迟|稍后|晚点)(?:五分钟|5分钟)?(?:后)?(?:再提醒(?:我)?)?(?:吧|了)?',compact)
+    if not match: return None
+    scope=match['scope']
+    group=resolve_all(conn,('全部' if scope=='都' else scope)+'都收到了',eligible,total)
+    if group and group['action']!='ambiguous': group['action']='snooze'
+    return group

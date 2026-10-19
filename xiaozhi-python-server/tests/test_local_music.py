@@ -154,6 +154,9 @@ class PluginTests(unittest.IsolatedAsyncioTestCase):
 
 class ApiTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        environment = patch.dict('os.environ', {'XIAOZHI_MUSIC_SERVICE_KEY': 'test-music-private'})
+        environment.start()
+        self.addCleanup(environment.stop)
         self.temp=tempfile.TemporaryDirectory()
         self.handler=MusicHandler({'plugins':{'play_music':{'music_dir':self.temp.name}}}, NS(device_handlers={}))
         app=web.Application()
@@ -161,7 +164,7 @@ class ApiTests(unittest.IsolatedAsyncioTestCase):
         app.router.add_route('POST','/music/control',self.handler.handle)
         app.router.add_route('DELETE','/music/{track_id}',self.handler.handle)
         self.client=TestClient(TestServer(app)); await self.client.start_server()
-        self.headers={'Service-Key':'xiaozhi-music'}
+        self.headers={'Service-Key':'test-music-private'}
 
     async def asyncTearDown(self):
         await self.client.close(); self.temp.cleanup()

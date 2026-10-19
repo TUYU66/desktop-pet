@@ -9,6 +9,7 @@ import uuid
 import re
 from core.conversation.requests import WebChatRequest, TERMINAL, finish_optional_followup
 from core.conversation.cancellation import CHAT_TIMEOUT_SECONDS
+from core.utils.service_auth import device_service_authorized
 from aiohttp import web
 from config.logger import setup_logging
 from config.config_loader import get_project_dir
@@ -40,6 +41,8 @@ class ChatHandler:
                     and not record.conn.stop_event.is_set())
 
     async def handle_request_status(self, request):
+        if not device_service_authorized(request):
+            return web.json_response({'code':401,'msg':'聊天服务认证失败'}, status=401)
         self.prune_requests()
         key=request.match_info['requestId']
         record=self.requests.get(key)
@@ -53,6 +56,8 @@ class ChatHandler:
         return web.json_response({'code':0,'data':record.public()})
 
     async def handle_send(self, request):
+        if not device_service_authorized(request):
+            return web.json_response({'code':401,'msg':'聊天服务认证失败'}, status=401)
         try:
             body=await request.json()
             if not isinstance(body,dict) or any(not isinstance(body.get(k,''),str) for k in ('text','deviceId','sessionId','requestId')):
@@ -121,7 +126,7 @@ class ChatHandler:
                 if session and conn.session_id != session:
                     await conn.switch_session(session)
                 record.session = conn.session_id
-                from core.handle.reportHandle import enqueue_asr_report
+                from core.reporting.chat_reports import enqueue_asr_report
                 from core.utils.dialogue import Message
                 enqueue_asr_report(conn, text, [])
                 conn.dialogue.put(Message(role='user', content=text))
@@ -252,6 +257,8 @@ class ChatHandler:
         """清除指定会话的记忆文件
         从 data/.memory.yaml 中删除对应 session_id 条目
         """
+        if not device_service_authorized(request):
+            return web.json_response({'code':401,'msg':'聊天服务认证失败'}, status=401)
         try:
             session_id = request.match_info.get("sessionId", "")
             if not session_id:

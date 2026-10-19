@@ -2,8 +2,8 @@
 import unittest
 import test_memory_management as fixtures
 from test_memory import fact, memory, extract, review
-from core.providers.memory.mem_local_short.management import RESOLVE_PROMPT, REPAIR_PROMPT, SOURCE_REPAIR_PROMPT, COVERAGE_PROMPT, Registry
-from core.providers.memory.mem_local_short.mem_local_short import ALIGN_PROMPT, AUDIT_PROMPT
+from legacy_memory.management import RESOLVE_PROMPT, REPAIR_PROMPT, SOURCE_REPAIR_PROMPT, COVERAGE_PROMPT, Registry
+from legacy_memory.mem_local_short import ALIGN_PROMPT, AUDIT_PROMPT
 
 
 class PlanningTests(unittest.IsolatedAsyncioTestCase):

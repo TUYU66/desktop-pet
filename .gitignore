@@ -1,81 +1,77 @@
-# Dependencies, environments and caches
-node_modules/
-managed_components/
-.venv/
-venv/
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.vite/
-.cache/
+# IDE
+.idea/
+.vscode/
+*.iml
 
-# Builds and local diagnostics
-build/
-build-*/
+# Java
 target/
+*.class
+*.jar
+*.war
+
+# Node
+node_modules/
 dist/
-dist-ssr/
-output/
-tmp/
-logs/
+.vite/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# ESP-IDF
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+*.ogg
+*.aaf
+
+# ESP32 reference server (device firmware source is versioned)
+xiaozhi-esp32-server-main/
+
+# Env
+.env
+.env.local
+data/
+
+# Logs
 *.log
+tmp/
+
+# Local reports, screenshots and exported documents (not application sources)
+/output/
+/xiaozhi-web/output/
+/.local/
+/xiaozhi-python-server/music/
+
+# Local build / test artifacts and downloaded model weights
+.playwright-cli/
+*.pt
+xiaozhi-esp32-main/build*/
+xiaozhi-esp32-main/.claude/
+stm32/**/Objects/
+stm32/**/Listings/
+stm32/**/DebugConfig/
+*.uvguix.*
 *.o
-*.obj
-*.a
-*.lib
-*.elf
-*.axf
-*.hex
-*.bin
 *.crf
 *.d
 *.dep
 *.lnp
 *.map
 *.lst
-*.class
-*.jar
-*.war
-Objects/
-Listings/
-DebugConfig/
+*.hex
 stm32/Balance_Car_KEil_HAL/MDK-ARM/Balance_Car_KEil_HAL/
-*.uvoptx
-*.uvguix.*
 
-# Private configuration, runtime data and model weights
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-*.p12
-*.pfx
-*.db
-*.sqlite*
-data/
-xiaozhi-python-server/config.yaml
-xiaozhi-python-server/music/
-xiaozhi-python-server/models/
-xiaozhi-python-server/config/assets/wakeup_words/
-*.pt
-*.pth
-*.onnx
-*.safetensors
-sdkconfig
-sdkconfig.old
-xiaozhi-esp32-main/main/assets/lang_config.h
-xiaozhi-esp32-main/main/mmap_generate_*.h
-
-# Editor and operating system
-.git/
-.idea/
-.vscode/
-.agents/
-.claude/
-.playwright-cli/
-.DS_Store
-Thumbs.db
+# This public source export contains five code modules only.
+/desktop-pet-android/
+/NewNow/
+/xiaozhi-python-server/config.local.yaml
+# Required Bluetooth announcement source assets.
+!xiaozhi-esp32-main/main/assets/common/bt_app_*.ogg

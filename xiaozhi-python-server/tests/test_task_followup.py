@@ -38,7 +38,7 @@ class CatchupTests(unittest.IsolatedAsyncioTestCase):
         self.audio = self.stack.enter_context(patch('core.handle.sendAudioHandle.sendAudio', new=AsyncMock(side_effect=audio)))
         self.drain = self.stack.enter_context(patch('core.handle.sendAudioHandle._wait_for_audio_completion', new=AsyncMock(side_effect=drain)))
         self.tts = self.stack.enter_context(patch('core.handle.sendAudioHandle.send_tts_message', new=AsyncMock(side_effect=tts)))
-        self.report = self.stack.enter_context(patch('core.handle.reportHandle.enqueue_tts_report'))
+        self.report = self.stack.enter_context(patch('core.reporting.chat_reports.enqueue_tts_report'))
 
     async def test_commit_only_after_audio_drain_and_do_not_repeat_same_interaction(self):
         self.assertTrue(await deliver(self.conn, 'old'))
@@ -158,8 +158,13 @@ class CatchupTests(unittest.IsolatedAsyncioTestCase):
         self.conn.sentence_id = 'new'
         self.conn.task_followup_sentence = 'new'
         self.conn.input_generation = 1
+        self.assertFalse(await deliver(self.conn, 'new'))  # Same continuing conversation is quiet.
+        from core.conversation.standby import begin_interaction
+        self.conn.conversation_awake = False  # A new wake after standby starts a new conversation.
+        begin_interaction(self.conn, awake=True)
+        self.conn.task_followup_sentence = 'new'
         self.assertTrue(await deliver(self.conn, 'new'))
-        self.assertEqual(self.fetch.await_count, 2)
+        self.assertEqual(self.fetch.await_count, 3)
         self.assertEqual(self.report.call_count, 2)
 
     def test_status_wording_and_stage_do_not_confuse_completion_with_expiry(self):

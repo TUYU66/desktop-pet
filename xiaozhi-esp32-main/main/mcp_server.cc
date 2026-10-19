@@ -125,7 +125,7 @@ void McpServer::AddUserOnlyTools() {
                 ESP_LOGW(TAG, "User requested reboot");
                 vTaskDelay(pdMS_TO_TICKS(1000));
 
-                app.Reboot();
+                app.Reboot("mcp_user_request");
             });
             return true;
         });

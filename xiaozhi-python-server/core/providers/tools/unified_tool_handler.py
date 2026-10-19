@@ -146,7 +146,7 @@ class UnifiedToolHandler:
             except Exception as e:
                 self.logger.warning(f"发送工具调用显示消息失败: {e}")
 
-            if function_name in {"self_chassis_stand_up", "self_chassis_rest", "self_chassis_turn_left", "self_chassis_turn_right", "self_chassis_turn_around"}:
+            if function_name in {"self_chassis_stand_up", "self_chassis_rest", "self_chassis_turn_left", "self_chassis_turn_right", "self_chassis_turn_around", "self_chassis_bluetooth_on"}:
                 mcp_client = getattr(conn, "mcp_client", None)
                 if (
                     mcp_client is None

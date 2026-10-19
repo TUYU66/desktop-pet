@@ -21,30 +21,30 @@ class ReminderSchedulerTest {
         var store=mock(ReminderStore.class); var item=ReminderStoreTest.item("scheduled",1);
         when(store.claim(eq(item),anyString(),anyLong())).thenReturn(true);
         var worker=scheduler(store,r->Mono.just(ClientResponse.create(HttpStatus.OK).header("Content-Type","application/json").body("{\"code\":0,\"outcome\":\"sent\"}").build()));
-        worker.dispatch(item);
+        worker.dispatch(item).block();
         verify(store).finish(eq(item),anyString(),eq("sent"),isNull(),anyLong());
     }
     @Test void timeoutCannotBeBlindlyRetried() {
         var store=mock(ReminderStore.class); var item=ReminderStoreTest.item("scheduled",1);
         when(store.claim(eq(item),anyString(),anyLong())).thenReturn(true);
-        scheduler(store,r->Mono.error(new java.util.concurrent.TimeoutException())).dispatch(item);
+        scheduler(store,r->Mono.error(new java.util.concurrent.TimeoutException())).dispatch(item).block();
         verify(store).finish(eq(item),anyString(),eq("unknown"),anyString(),anyLong());
     }
     @Test void unavailableServiceBeforeConnectionIsRetryable() {
         var store=mock(ReminderStore.class); var item=ReminderStoreTest.item("scheduled",1);
         when(store.claim(eq(item),anyString(),anyLong())).thenReturn(true);
-        scheduler(store,r->Mono.error(new java.net.ConnectException())).dispatch(item);
+        scheduler(store,r->Mono.error(new java.net.ConnectException())).dispatch(item).block();
         verify(store).finish(eq(item),anyString(),eq("retry"),anyString(),anyLong());
     }
     @Test void failedClaimNeverSends() {
         var store=mock(ReminderStore.class); var exchange=mock(ExchangeFunction.class);
-        scheduler(store,exchange).dispatch(ReminderStoreTest.item("scheduled",1));
+        scheduler(store,exchange).dispatch(ReminderStoreTest.item("scheduled",1)).block();
         verifyNoInteractions(exchange); verify(store,never()).finish(any(),anyString(),anyString(),any(),anyLong());
     }
     @Test void errorHttpStatusDoesNotCountAsSent() {
         var store=mock(ReminderStore.class); var item=ReminderStoreTest.item("scheduled",1);
         when(store.claim(eq(item),anyString(),anyLong())).thenReturn(true);
-        scheduler(store,r->Mono.just(ClientResponse.create(HttpStatus.UNAUTHORIZED).header("Content-Type","application/json").body("{\"code\":0,\"outcome\":\"sent\"}").build())).dispatch(item);
+        scheduler(store,r->Mono.just(ClientResponse.create(HttpStatus.UNAUTHORIZED).header("Content-Type","application/json").body("{\"code\":0,\"outcome\":\"sent\"}").build())).dispatch(item).block();
         verify(store).finish(eq(item),anyString(),eq("unknown"),anyString(),anyLong());
     }
 
@@ -65,7 +65,7 @@ class ReminderSchedulerTest {
             .header("Content-Type","application/json")
             .body("{\"code\":0,\"outcomes\":{\""+attempts.get("a")+"\":\"sent\",\""+attempts.get("b")+"\":\"retry\"}}")
             .build()));
-        scheduler(store,exchange).dispatchBatch(List.of(a,b,c,changed));
+        scheduler(store,exchange).dispatchBatch(List.of(a,b,c,changed)).block();
         verify(exchange,times(1)).exchange(any());
         verify(store).finish(eq(a),eq(attempts.get("a")),eq("sent"),isNull(),anyLong());
         verify(store).finish(eq(b),eq(attempts.get("b")),eq("retry"),anyString(),anyLong());
@@ -75,14 +75,14 @@ class ReminderSchedulerTest {
     }
     @Test void batchCannotCombineDifferentDevicesOrSendBeforeClaim() {
         var store=mock(ReminderStore.class); var exchange=mock(ExchangeFunction.class);
-        scheduler(store,exchange).dispatchBatch(List.of(dueItem("a","one"),dueItem("b","two")));
+        scheduler(store,exchange).dispatchBatch(List.of(dueItem("a","one"),dueItem("b","two"))).block();
         verifyNoInteractions(store,exchange);
     }
     @Test void failedReceiptSaveDoesNotPreventOtherMembersSaving() {
         var store=mock(ReminderStore.class); var a=dueItem("a","device"); var b=dueItem("b","device");
         when(store.claim(any(),anyString(),anyLong())).thenReturn(true);
         doThrow(new IllegalStateException()).when(store).finish(eq(a),anyString(),anyString(),any(),anyLong());
-        scheduler(store,r->Mono.error(new java.net.ConnectException())).dispatchBatch(List.of(a,b));
+        scheduler(store,r->Mono.error(new java.net.ConnectException())).dispatchBatch(List.of(a,b)).block();
         verify(store).finish(eq(b),anyString(),eq("retry"),anyString(),anyLong());
     }
 }

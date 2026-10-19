@@ -11,6 +11,12 @@ from core.handle.sendAudioHandle import _do_send_audio
 
 
 class SpokenFeedbackTests(unittest.TestCase):
+    def test_bluetooth_entry_announces_mode_and_app_without_claiming_completion(self):
+        text=chassis_acknowledgement('self_chassis_bluetooth_on')
+        self.assertIn('蓝牙控制模式',text)
+        self.assertIn('App',text)
+        self.assertNotIn('已经站稳',text)
+
     def test_repeat_notice_and_single_notice_keep_content_without_duplicate_punctuation(self):
         first=reminder_announcement({'text':'吃饭。','deliveryNumber':1})
         retry=reminder_announcement({'text':'吃饭。','deliveryNumber':2})

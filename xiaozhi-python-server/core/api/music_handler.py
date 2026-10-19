@@ -1,11 +1,9 @@
 import asyncio
-import hmac
-import ipaddress
-import os
 import uuid
 from pathlib import Path
 from aiohttp import web
 from core.music import MusicLibrary, MAX_BYTES, player, validate_mp3, local_details
+from core.utils.service_auth import service_authorized
 
 
 class MusicHandler:
@@ -31,15 +29,7 @@ class MusicHandler:
 
     @staticmethod
     def authorized(request):
-        key = os.environ.get('XIAOZHI_MUSIC_SERVICE_KEY', '')
-        if not key:
-            try:
-                ip = ipaddress.ip_address(request.remote or '')
-                if not (ip.is_loopback or getattr(ip, 'ipv4_mapped', None) and ip.ipv4_mapped.is_loopback):
-                    return False
-            except ValueError:
-                return False
-        return hmac.compare_digest(request.headers.get('Service-Key', ''), key or 'xiaozhi-music')
+        return service_authorized(request, 'XIAOZHI_MUSIC_SERVICE_KEY')
 
     async def handle(self, request):
         if not self.authorized(request):

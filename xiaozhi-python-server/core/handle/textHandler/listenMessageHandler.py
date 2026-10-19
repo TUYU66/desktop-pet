@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from core.transport.connection import ConnectionHandler
 
 from core.handle.receiveAudioHandle import startToChat
-from core.handle.reportHandle import enqueue_asr_report
+from core.reporting.chat_reports import enqueue_asr_report
 from core.handle.sendAudioHandle import send_stt_message, send_tts_message
 from core.handle.textMessageHandler import TextMessageHandler
 from core.handle.textMessageType import TextMessageType

@@ -3,11 +3,11 @@ import unittest
 from unittest.mock import AsyncMock
 import test_memory_policy as support
 from test_memory import WHEN, review
-from core.providers.memory.mem_local_short.categories import AUTO_CATEGORIES, classified_source
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.management import Registry
-from core.providers.memory.mem_local_short.policy import custom_source, extraction_prompt
-from core.providers.memory.mem_local_short.facts import validate_fact
+from legacy_memory.categories import AUTO_CATEGORIES, classified_source
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.management import Registry
+from legacy_memory.policy import custom_source, extraction_prompt
+from legacy_memory.facts import validate_fact
 
 
 def classified(predicate, value, category="habit", **extra):

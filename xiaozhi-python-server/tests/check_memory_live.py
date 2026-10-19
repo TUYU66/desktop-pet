@@ -14,11 +14,11 @@ from unittest.mock import AsyncMock, Mock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from config.config_loader import load_config
 from core.utils.llm import create_instance
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.facts import validate_fact, render_fact, fact_key, numeric_quantity, same_slot
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.facts import validate_fact, render_fact, fact_key, numeric_quantity, same_slot
 
 WHEN = datetime(2026, 9, 13, 10, 0)
-MODULE = "core.providers.memory.mem_local_short.mem_local_short"
+MODULE = "legacy_memory.mem_local_short"
 
 
 def old(predicate, value, evidence, id=8, subject="user", scope="current", time="2025", category="profile", precision="year"):

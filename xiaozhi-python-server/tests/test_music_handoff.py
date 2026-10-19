@@ -261,7 +261,7 @@ class MusicHandoffTests(unittest.IsolatedAsyncioTestCase):
                 patch('core.handle.sendAudioHandle.send_tts_message', new=AsyncMock()), \
                 patch('core.conversation.standby.enter_standby', new=AsyncMock()), \
                 patch('core.music.conversation.say', new=AsyncMock(side_effect=say)) as reply, \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()):
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()):
             await self.player.command('play', source='netease', track_id='netease:1', playlist_id='90')
             await asyncio.wait_for(started[0].wait(), 1)
             await self.player.command('next', source='netease')

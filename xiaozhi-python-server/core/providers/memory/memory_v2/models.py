@@ -1,4 +1,5 @@
 """V2边界模型；来源和时间只接受应用传入的消息。"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Protocol
@@ -45,8 +46,13 @@ class UserTurn:
     @classmethod
     def create(cls, latest_user, message_id, timestamp: datetime, role_id, session_id):
         text(latest_user, "latest_user_invalid", 2000)
-        return cls(latest_user, text(message_id, "message_id_invalid", 160),
-                   timestamp.astimezone().isoformat(timespec="seconds"), role_id or "default", session_id or "unknown")
+        return cls(
+            latest_user,
+            text(message_id, "message_id_invalid", 160),
+            timestamp.astimezone().isoformat(timespec="seconds"),
+            role_id or "default",
+            session_id or "unknown",
+        )
 
 
 @dataclass(frozen=True)

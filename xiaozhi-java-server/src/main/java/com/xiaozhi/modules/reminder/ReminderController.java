@@ -51,6 +51,9 @@ public class ReminderController {
     @PostMapping("/{id}/actions") public Mono<Result<Reminder>> act(@CurrentUser UserEntity user,@PathVariable String id,@RequestBody Map<String,Object> body) {
         return run(user,()->actionBody(user.getId(),id,body));
     }
+    @PostMapping("/{id}/presented") public Mono<Result<Reminder>> presented(@CurrentUser UserEntity user,@PathVariable String id,@RequestBody Map<String,Object> body) {
+        return run(user,()->store.start(user.getId(),id,number(body,"dueAt"),null,System.currentTimeMillis()));
+    }
     @DeleteMapping("/{id}") public Mono<Result<String>> deleteHistory(@CurrentUser UserEntity user,@PathVariable String id,@RequestParam long version) {
         return run(user,()->{ store.deleteHistory(user.getId(),id,version,System.currentTimeMillis()); return "记录已删除"; });
     }
@@ -95,6 +98,7 @@ public class ReminderController {
             }
             var item=store.get(user.getId(),id);
             if(!item.deviceId().equals(device)) throw new IllegalArgumentException("设备与提醒不匹配");
+            if(action.equals("started")) return store.start(user.getId(),id,item.dueAt(),string(body,"attemptId"),System.currentTimeMillis());
             if(action.equals("followup_claim")) return Map.of("claimed",store.claimFollowup(user.getId(),device,id,string(body,"token"),number(body,"stage"),System.currentTimeMillis()));
             if(action.equals("followup_valid")) return Map.of("valid",body.containsKey("stage")
                 ?store.followupValid(user.getId(),device,id,string(body,"token"),number(body,"stage"),System.currentTimeMillis())

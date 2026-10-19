@@ -156,9 +156,9 @@ public class OtaController {
         }
         File targetDir = new File("data/firmware");
         if (!targetDir.exists()) targetDir.mkdirs();
-        File target = new File(targetDir, safeName);
+        File target = new File(targetDir, java.util.UUID.randomUUID()+"-"+safeName);
         return filePart.transferTo(target)
-                .then(Mono.fromCallable(() -> {
+                .then(Mono.<Result<?>>fromCallable(() -> {
                     FirmwareEntity entity = new FirmwareEntity();
                     entity.setVersion(version);
                     entity.setDescription(description);
@@ -170,7 +170,7 @@ public class OtaController {
                     entity.setCreateDate(LocalDateTime.now());
                     firmwareService.save(entity);
                     return Result.ok();
-                }));
+                }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic()));
     }
 
     @DeleteMapping("/xiaozhi/api/admin/firmware/{id}")

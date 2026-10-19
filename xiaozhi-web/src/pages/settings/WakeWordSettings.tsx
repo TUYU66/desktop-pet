@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, App, Button, Input, Space, Typography } from 'antd';
 import { getBotConfig, getWakeWordStatus, saveBotConfig } from '../../api/user';
+import { startPolling } from '../../utils/polling';
 
 type Status = { state: string; word: string; reason?: string; pinyin?: string; pronunciation?: string };
 const statusText: Record<string, string> = {
@@ -37,16 +38,23 @@ export default function WakeWordSettings({ onDirtyChange, onWordChange }: { onDi
   useEffect(() => {
     if (saved === null) return;
     let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    const refresh = async () => {
+    let applied = false;
+    const refresh = async (signal: AbortSignal) => {
       try {
-        const result = await getWakeWordStatus();
-        if (!cancelled) setStatus(result.data?.word === saved && (result.data.state !== 'applied' || (result.data.pronunciation || '') === savedPinyin) ? result.data : { state: 'pending', word: saved });
-      } catch { if (!cancelled) setStatus({ state: 'unreachable', word: saved }); }
-      if (!cancelled) timer = setTimeout(refresh, 5000);
+        const result = await getWakeWordStatus(signal);
+        if (!cancelled && !signal.aborted) {
+          const next = result.data?.word === saved && (result.data.state !== 'applied' || (result.data.pronunciation || '') === savedPinyin) ? result.data : { state: 'pending', word: saved };
+          applied = next.state === 'applied';
+          setStatus(next);
+          return next.state !== 'unreachable';
+        }
+      } catch {
+        if (!cancelled && !signal.aborted) setStatus({ state: 'unreachable', word: saved });
+        return false;
+      }
     };
-    void refresh();
-    return () => { cancelled = true; clearTimeout(timer); };
+    const polling = startPolling(refresh, { interval: () => applied ? 30000 : 5000, maxInterval: 60000 });
+    return () => { cancelled = true; polling.stop(); };
   }, [saved, savedPinyin]);
   const save = async () => {
     if (!valid || saved === null) return;

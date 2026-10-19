@@ -7,6 +7,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import reactor.core.Disposable;
+import reactor.core.Disposables;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
@@ -14,108 +18,165 @@ import java.util.concurrent.*;
 @Component
 @EnableScheduling
 public class ReminderScheduler {
-    private static final Logger log=LoggerFactory.getLogger(ReminderScheduler.class);
+    private static final Logger log = LoggerFactory.getLogger(ReminderScheduler.class);
     private final ReminderStore store;
     private final WebClient client;
-    private final Set<String> activeDevices = ConcurrentHashMap.newKeySet();
-    private final ExecutorService deliveries = new ThreadPoolExecutor(4,4,0L,TimeUnit.MILLISECONDS,
-        new ArrayBlockingQueue<>(16), r -> { Thread t=new Thread(r,"reminder-delivery"); t.setDaemon(true); return t; },
-        new ThreadPoolExecutor.AbortPolicy());
-    @jakarta.annotation.PreDestroy
-    public void shutdown() { deliveries.shutdownNow(); }
+    private final Semaphore slots = new Semaphore(4);
+    private final Map<String, Disposable.Swap> active = new ConcurrentHashMap<>();
     @org.springframework.beans.factory.annotation.Autowired private ReminderPlans plans;
     @Value("${xiaozhi.python-server.base-url:http://localhost:8004}") private String baseUrl;
-    @Value("${XIAOZHI_REMINDER_SERVICE_KEY:xiaozhi-reminders}") private String key;
-    public ReminderScheduler(ReminderStore store,WebClient client) { this.store=store; this.client=client; }
-    @Scheduled(fixedDelay=2000,initialDelay=10000)
+    @Value("${XIAOZHI_REMINDER_SERVICE_KEY:}") private String key;
+
+    public ReminderScheduler(ReminderStore store, WebClient client) {
+        this.store = store;
+        this.client = client;
+    }
+
+    @jakarta.annotation.PreDestroy
+    public void shutdown() {
+        active.values().forEach(Disposable::dispose);
+        active.clear();
+    }
+
+    @Scheduled(fixedDelay = 2000, initialDelay = 10000)
     public void tick() {
         try {
-            if(plans!=null) plans.materialize(System.currentTimeMillis());
-            Map<String,List<Reminder>> batches=new LinkedHashMap<>();
-            for(Reminder item:store.due(System.currentTimeMillis())) {
-                var batch=batches.computeIfAbsent(item.deviceId(),ignored->new ArrayList<>());
-                if(batch.size()<4) batch.add(item);
+            long now = System.currentTimeMillis();
+            if (plans != null) plans.materialize(now);
+            Map<String, List<Reminder>> batches = new LinkedHashMap<>();
+            for (Reminder item : store.due(now)) {
+                var batch = batches.computeIfAbsent(item.deviceId(), ignored -> new ArrayList<>());
+                if (batch.size() < 4) batch.add(item);
             }
-            for(var entry:batches.entrySet()) {
-                String device=entry.getKey(); List<Reminder> batch=List.copyOf(entry.getValue());
-                if(!activeDevices.add(device)) continue;
-                try {
-                    deliveries.execute(() -> {
-                        try { dispatchBatch(batch); }
-                        catch(Exception e) { logFailure("发送",e); }
-                        finally { activeDevices.remove(device); }
-                    });
-                } catch(RejectedExecutionException e) {
-                    activeDevices.remove(device); // No claim: the next tick can retry.
+            for (var entry : batches.entrySet()) {
+                String device = entry.getKey();
+                var ticket = Disposables.swap();
+                if (active.putIfAbsent(device, ticket) != null) continue;
+                if (!slots.tryAcquire()) {
+                    active.remove(device, ticket);
+                    continue; // No claim or queued work: a later tick may retry.
                 }
+                ticket.update(dispatchBatch(List.copyOf(entry.getValue()))
+                    .doFinally(signal -> {
+                        active.remove(device, ticket);
+                        slots.release();
+                    }).subscribe(ignored -> {}, error -> logFailure("发送", error)));
             }
+        } catch (Exception error) {
+            logFailure("调度", error);
         }
-        catch(Exception e) { logFailure("调度",e); }
     }
-    @Scheduled(fixedDelay=3600000,initialDelay=20000)
+
+    @Scheduled(fixedDelay = 3600000, initialDelay = 20000)
     public void pruneFinishedHistory() {
         try {
-            int removed=store.pruneFinishedHistory(System.currentTimeMillis());
-            if(removed>0) log.info("已清理超过7天的结束提醒: {} 条",removed);
-        } catch(Exception e) {
-            logFailure("历史清理",e);
+            int removed = store.pruneFinishedHistory(System.currentTimeMillis());
+            if (removed > 0) log.info("已清理超过7天的结束提醒: {} 条", removed);
+        } catch (Exception error) {
+            logFailure("历史清理", error);
         }
     }
-    void dispatch(Reminder item) {
-        dispatchBatch(List.of(item));
+
+    Mono<Void> dispatch(Reminder item) {
+        return dispatchBatch(List.of(item));
     }
-    void dispatchBatch(List<Reminder> items) {
-        if(items.isEmpty()||items.size()>4) return;
-        Reminder first=items.get(0);
-        if(items.stream().anyMatch(item->item.userId()!=first.userId()||!item.deviceId().equals(first.deviceId()))) return;
-        try { store.requireOwner(first.userId()); }
-        catch(IllegalArgumentException e) { return; }
-        Map<String,Reminder> claimed=new LinkedHashMap<>();
-        for(Reminder item:items) {
-            String attempt=UUID.randomUUID().toString();
-            try { if(store.claim(item,attempt,System.currentTimeMillis())) claimed.put(attempt,item); }
-            catch(Exception e) { logFailure("认领 id="+item.id(),e); }
-        }
-        if(claimed.isEmpty()) return;
-        List<Map<String,Object>> payload=new ArrayList<>();
-        claimed.forEach((attempt,item)->payload.add(Map.of("attemptId",attempt,"text",item.title(),
-            "reminderId",item.id(),"deliveryNumber",item.deliveryCount()+1)));
-        boolean batch=claimed.size()>1;
-        Map<String,Object> body=new HashMap<>();
-        body.put("deviceId",first.deviceId());
-        if(batch) { body.put("attemptId",UUID.randomUUID().toString()); body.put("items",payload); }
-        else body.putAll(payload.get(0));
-        String fallback="unknown";
-        Map<?,?> outcomes=Map.of();
+
+    private record Reply(Map<?, ?> body, String fallback) {}
+
+    Mono<Void> dispatchBatch(List<Reminder> items) {
+        return Mono.defer(() -> prepareDelivery(items)).subscribeOn(Schedulers.boundedElastic());
+    }
+
+    private Mono<Void> prepareDelivery(List<Reminder> items) {
+        if (items.isEmpty() || items.size() > 4) return Mono.empty();
+        Reminder first = items.get(0);
+        if (items.stream().anyMatch(item -> item.userId() != first.userId()
+            || !item.deviceId().equals(first.deviceId()))) return Mono.empty();
         try {
-            Map<?,?> response=client.post().uri(baseUrl+"/xiaozhi/reminders/announce")
-                .header("Service-Key",key.isBlank()?"xiaozhi-reminders":key).bodyValue(body)
-                .exchangeToMono(r->r.bodyToMono(Map.class).filter(ignored->r.statusCode().is2xxSuccessful())).block(Duration.ofSeconds(150));
-            if(response!=null&&response.get("code") instanceof Number n&&n.intValue()==0) {
-                if(batch&&response.get("outcomes") instanceof Map<?,?> perItem) outcomes=perItem;
-                else if(!batch&&response.get("outcome") instanceof String o&&Set.of("sent","retry","unknown").contains(o)) fallback=o;
-            }
-        } catch(Exception e) {
-            Throwable cause=e;
-            while(cause.getCause()!=null&&cause.getCause()!=cause) cause=cause.getCause();
-            if(cause instanceof java.net.ConnectException||cause instanceof java.net.UnknownHostException) {
-                fallback="retry";
-            }
-            logFailure("发送未确认 device="+first.deviceId(),e);
+            store.requireOwner(first.userId());
+        } catch (IllegalArgumentException error) {
+            return Mono.empty();
         }
-        for(var entry:claimed.entrySet()) {
-            String outcome=outcomes.get(entry.getKey()) instanceof String o&&Set.of("sent","retry","unknown").contains(o)?o:fallback;
-            String error=switch(outcome) { case "sent"->null; case "retry"->"设备离线、忙碌或语音暂不可用，等待重试"; default->"发送结果未确认，请核实后再操作"; };
-            // A partial batch keeps an independent receipt and retry counter per reminder.
-            try { store.finish(entry.getValue(),entry.getKey(),outcome,error,System.currentTimeMillis()); }
-            catch(Exception e) { logFailure("保存回执 id="+entry.getValue().id(),e); }
+        Map<String, Reminder> claimed = new LinkedHashMap<>();
+        for (Reminder item : items) {
+            String attempt = UUID.randomUUID().toString();
+            try {
+                if (store.claim(item, attempt, System.currentTimeMillis())) claimed.put(attempt, item);
+            } catch (Exception error) {
+                logFailure("认领 id=" + item.id(), error);
+            }
+        }
+        if (claimed.isEmpty()) return Mono.empty();
+        List<Map<String, Object>> payload = new ArrayList<>();
+        claimed.forEach((attempt, item) -> payload.add(Map.of(
+            "attemptId", attempt, "text", item.title(), "reminderId", item.id(),
+            "deliveryNumber", item.status().equals("awaiting_confirmation")
+                ? item.deliveryCount() : item.deliveryCount() + 1)));
+        boolean batch = claimed.size() > 1;
+        Map<String, Object> body = new HashMap<>();
+        body.put("deviceId", first.deviceId());
+        if (batch) {
+            body.put("attemptId", UUID.randomUUID().toString());
+            body.put("items", payload);
+        } else body.putAll(payload.get(0));
+
+        return client.post().uri(baseUrl + "/xiaozhi/reminders/announce")
+            .header("Service-Key", key).bodyValue(body)
+            .exchangeToMono(response -> response.bodyToMono(Map.class)
+                .filter(ignored -> response.statusCode().is2xxSuccessful()))
+            .map(response -> new Reply(response, "unknown"))
+            .defaultIfEmpty(new Reply(Map.of(), "unknown"))
+            .timeout(Duration.ofSeconds(150))
+            .onErrorResume(error -> {
+                Throwable cause = rootCause(error);
+                String fallback = cause instanceof java.net.ConnectException
+                    || cause instanceof java.net.UnknownHostException ? "retry" : "unknown";
+                logFailure("发送未确认 device=" + first.deviceId(), error);
+                return Mono.just(new Reply(Map.of(), fallback));
+            })
+            // JDBC receipts must not execute on the HTTP event loop.
+            .publishOn(Schedulers.boundedElastic())
+            .doOnNext(reply -> finish(claimed, batch, reply)).then();
+    }
+
+    private void finish(Map<String, Reminder> claimed, boolean batch, Reply reply) {
+        String fallback = reply.fallback();
+        Map<?, ?> outcomes = Map.of();
+        if (reply.body().get("code") instanceof Number n && n.intValue() == 0) {
+            if (batch && reply.body().get("outcomes") instanceof Map<?, ?> results) outcomes = results;
+            else if (!batch && validOutcome(reply.body().get("outcome"))) fallback = (String) reply.body().get("outcome");
+        }
+        for (var entry : claimed.entrySet()) {
+            Object result = outcomes.get(entry.getKey());
+            String outcome = validOutcome(result) ? (String) result : fallback;
+            String error = switch (outcome) {
+                case "sent" -> null;
+                case "retry" -> "设备离线、忙碌或语音暂不可用，等待重试";
+                default -> "发送结果未确认，请核实后再操作";
+            };
+            try {
+                store.finish(entry.getValue(), entry.getKey(), outcome, error, System.currentTimeMillis());
+            } catch (Exception failure) {
+                logFailure("保存回执 id=" + entry.getValue().id(), failure);
+            }
         }
     }
-    private static void logFailure(String phase,Exception error) {
-        Throwable cause=error;
-        while(cause.getCause()!=null&&cause.getCause()!=cause) cause=cause.getCause();
-        if(cause instanceof java.sql.SQLException sql)
-            log.warn("提醒{}暂不可用: {}, root={}, SQLState={}, vendorCode={}",phase,error.getClass().getSimpleName(),cause.getClass().getSimpleName(),sql.getSQLState(),sql.getErrorCode());
-        else log.warn("提醒{}暂不可用: {}, root={}",phase,error.getClass().getSimpleName(),cause.getClass().getSimpleName());
+
+    private static boolean validOutcome(Object value) {
+        return value instanceof String text && Set.of("sent", "retry", "unknown").contains(text);
+    }
+
+    private static Throwable rootCause(Throwable error) {
+        while (error.getCause() != null && error.getCause() != error) error = error.getCause();
+        return error;
+    }
+
+    private static void logFailure(String phase, Throwable error) {
+        Throwable cause = rootCause(error);
+        if (cause instanceof java.sql.SQLException sql)
+            log.warn("提醒{}暂不可用: {}, root={}, SQLState={}, vendorCode={}", phase,
+                error.getClass().getSimpleName(), cause.getClass().getSimpleName(), sql.getSQLState(), sql.getErrorCode());
+        else log.warn("提醒{}暂不可用: {}, root={}", phase,
+            error.getClass().getSimpleName(), cause.getClass().getSimpleName());
     }
 }

@@ -1,12 +1,10 @@
 """Dashboard reads and allowlisted controls, with MCP acknowledgement and read-back."""
 import asyncio
-import hmac
-import ipaddress
 import json
-import os
 import time
 from aiohttp import web
 from core.api.volume_handler import VolumeHandler
+from core.utils.service_auth import device_service_authorized
 
 EXPRESSIONS={'neutral','happy','laughing','loving','angry','sad','crying','tired','sleepy','confused','curious','surprised','shy','confident','winking','peek_left','peek_right','daydream','yawn'}
 TOOLS={'volume':'self.audio_speaker.set_volume','brightness':'self.screen.set_brightness','expression':'self.face.set_expression','colors':'self.face.set_colors'}
@@ -22,13 +20,7 @@ class DevicePanelHandler(VolumeHandler):
                 and not conn.stop_event.is_set())
 
     def authorized(self, request):
-        key=os.environ.get('XIAOZHI_DEVICE_SERVICE_KEY','')
-        if not key:
-            try:
-                ip=ipaddress.ip_address(request.remote or '')
-                if not (ip.is_loopback or getattr(ip,'ipv4_mapped',None) and ip.ipv4_mapped.is_loopback): return False
-            except ValueError: return False
-        return hmac.compare_digest(request.headers.get('Service-Key',''),key or 'xiaozhi-device')
+        return device_service_authorized(request)
 
     def supported(self, conn):
         client=getattr(conn,'mcp_client',None)

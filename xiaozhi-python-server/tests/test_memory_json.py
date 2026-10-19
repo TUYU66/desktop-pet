@@ -3,8 +3,8 @@ import unittest
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 from core.providers.llm.openai.openai import LLMProvider
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.facts import evidence_matches
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.facts import evidence_matches
 
 
 class JsonTransportTests(unittest.TestCase):

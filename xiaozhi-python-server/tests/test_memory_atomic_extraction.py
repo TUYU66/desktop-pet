@@ -2,10 +2,10 @@
 import unittest
 from unittest.mock import AsyncMock
 from test_memory import WHEN
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.categories import AUTO_CATEGORIES
-from core.providers.memory.mem_local_short.facts import numeric_quantity
-from core.providers.memory.mem_local_short.protocol import review_extraction, repair_candidate_time
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.categories import AUTO_CATEGORIES
+from legacy_memory.facts import numeric_quantity
+from legacy_memory.protocol import review_extraction, repair_candidate_time
 
 
 def candidate(subject,predicate,value,category="relationship",intent="assert"):

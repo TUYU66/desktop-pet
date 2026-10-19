@@ -4,8 +4,8 @@ import json
 import sys
 from unittest.mock import AsyncMock, Mock, patch
 from check_memory_live import load_config, create_instance, MemoryProvider, NS, WHEN, MODULE
-from core.providers.memory.mem_local_short.facts import digest, validate_fact, numeric_quantity
-from core.providers.memory.mem_local_short.policy import core_source
+from legacy_memory.facts import digest, validate_fact, numeric_quantity
+from legacy_memory.policy import core_source
 
 
 def liked_photography():

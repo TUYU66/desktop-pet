@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20261018-reminder-45-second-window" author="codex">
+  <comment>Extend an active 30-second round from its original start, never from restart time.</comment>
+  <sql><![CDATA[
+   UPDATE user_reminder SET ack_deadline=round_started_at+45000,version=version+1
+    WHERE task_id IS NULL AND status='awaiting_confirmation' AND round_started_at>0
+     AND ack_deadline<=round_started_at+40000;
+  ]]></sql>
+ </changeSet>
+</databaseChangeLog>

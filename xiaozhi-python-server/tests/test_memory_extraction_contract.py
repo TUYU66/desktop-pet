@@ -6,8 +6,8 @@ from test_memory_policy import record
 import test_memory_policy as support
 from test_memory_aggregates import entry
 import test_memory_aggregates as aggregates
-from core.providers.memory.mem_local_short.protocol import decode_candidate, repair_candidate_time, preferred_label
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
+from legacy_memory.protocol import decode_candidate, repair_candidate_time, preferred_label
+from legacy_memory.mem_local_short import MemoryProvider
 
 
 class ExtractionContractTests(unittest.IsolatedAsyncioTestCase):

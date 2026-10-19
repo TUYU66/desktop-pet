@@ -34,9 +34,19 @@ public class MemoryController {
     public Result<List<UserMemoryEntity>> list(@CurrentUser UserEntity user,@RequestParam(defaultValue="default") String roleId) {
         if(user==null) return Result.error(401,"未登录");
         try {
-            return Result.ok(memoryDao.selectList(owned(user.getId(),role(roleId))
-                .orderByDesc(UserMemoryEntity::getUpdateDate).orderByDesc(UserMemoryEntity::getId)).stream()
-                .filter(m -> !"invalidated".equals(semanticStore.decode(m).get("status"))).toList());
+            List<UserMemoryEntity> result=new ArrayList<>();
+            for(var memory:memoryDao.selectList(owned(user.getId(),role(roleId))
+                .orderByDesc(UserMemoryEntity::getUpdateDate).orderByDesc(UserMemoryEntity::getId))) {
+                try {
+                    if(!"invalidated".equals(semanticStore.decode(memory).get("status"))) result.add(memory);
+                } catch(MemoryFactStore.Conflict | IllegalArgumentException incompatible) {
+                    // Preserve the user's record for explicit review; never delete or
+                    // reinterpret an incompatible fact as a current semantic memory.
+                    memory.setRequiresMigration(true);
+                    result.add(memory);
+                }
+            }
+            return Result.ok(result);
         } catch(MemoryFactStore.Conflict e) { return Result.error(409,e.getMessage()); }
           catch(IllegalArgumentException e) { return Result.error(e.getMessage()); }
     }

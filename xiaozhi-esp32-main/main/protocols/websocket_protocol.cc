@@ -1,4 +1,5 @@
 #include "websocket_protocol.h"
+#include "binary_audio_frame.h"
 #include "board.h"
 #include "system_info.h"
 #include "application.h"
@@ -202,38 +203,18 @@ bool WebsocketProtocol::OpenAudioChannel() {
             // 二进制帧是下行 Opus；按握手版本拆包后交给 AudioService 解码。
             ESP_LOGD(TAG, "Binary data received: len=%u, version=%d", static_cast<unsigned>(len), version_);
             if (on_incoming_audio_ != nullptr) {
-                if (version_ == 2) {
-                    BinaryProtocol2* bp2 = (BinaryProtocol2*)data;
-                    bp2->version = ntohs(bp2->version);
-                    bp2->type = ntohs(bp2->type);
-                    bp2->timestamp = ntohl(bp2->timestamp);
-                    bp2->payload_size = ntohl(bp2->payload_size);
-                    auto payload = (uint8_t*)bp2->payload;
-                    on_incoming_audio_(std::make_unique<AudioStreamPacket>(AudioStreamPacket{
-                        .sample_rate = server_sample_rate_,
-                        .frame_duration = server_frame_duration_,
-                        .timestamp = bp2->timestamp,
-                        .payload = std::vector<uint8_t>(payload, payload + bp2->payload_size)
-                    }));
-                } else if (version_ == 3) {
-                    BinaryProtocol3* bp3 = (BinaryProtocol3*)data;
-                    bp3->type = bp3->type;
-                    bp3->payload_size = ntohs(bp3->payload_size);
-                    auto payload = (uint8_t*)bp3->payload;
-                    on_incoming_audio_(std::make_unique<AudioStreamPacket>(AudioStreamPacket{
-                        .sample_rate = server_sample_rate_,
-                        .frame_duration = server_frame_duration_,
-                        .timestamp = 0,
-                        .payload = std::vector<uint8_t>(payload, payload + bp3->payload_size)
-                    }));
-                } else {
-                    on_incoming_audio_(std::make_unique<AudioStreamPacket>(AudioStreamPacket{
-                        .sample_rate = server_sample_rate_,
-                        .frame_duration = server_frame_duration_,
-                        .timestamp = 0,
-                        .payload = std::vector<uint8_t>((uint8_t*)data, (uint8_t*)data + len)
-                    }));
+                BinaryAudioFrame frame;
+                if (!ParseBinaryAudioFrame(version_, reinterpret_cast<const uint8_t*>(data), len, frame)) {
+                    ESP_LOGW(TAG, "Discard malformed audio frame: version=%d bytes=%u",
+                             version_, static_cast<unsigned>(len));
+                    return;
                 }
+                on_incoming_audio_(std::make_unique<AudioStreamPacket>(AudioStreamPacket{
+                    .sample_rate = server_sample_rate_,
+                    .frame_duration = server_frame_duration_,
+                    .timestamp = frame.timestamp,
+                    .payload = std::vector<uint8_t>(frame.payload, frame.payload + frame.size)
+                }));
             }
         } else {
             // 文本帧是 hello、listen、tts、mcp 等控制消息。

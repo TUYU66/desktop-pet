@@ -23,10 +23,12 @@ class OverlapDeliveryTests(unittest.IsolatedAsyncioTestCase):
         self.items=[item('拿快递'),item('喝水')]
         self.announcements=[]
         self.stack=ExitStack(); self.addCleanup(self.stack.close)
-        self.stack.enter_context(patch.dict('os.environ',{'XIAOZHI_REMINDER_SERVICE_KEY':''}))
+        self.stack.enter_context(patch.dict('os.environ',{'XIAOZHI_REMINDER_SERVICE_KEY':'test-reminder-private'}))
         self.state=self.stack.enter_context(patch('core.reminders.client.state',new=AsyncMock(return_value={
             'items':[dict(id=i['reminderId'],attemptId=i['attemptId'],status='dispatching') for i in self.items]})))
-        self.command=self.stack.enter_context(patch('core.reminders.client.command',new=AsyncMock()))
+        async def started(device,body):
+            return dict(id=body['id'],attemptId=body.get('attemptId'),status='awaiting_confirmation')
+        self.command=self.stack.enter_context(patch('core.reminders.client.command',new=AsyncMock(side_effect=started)))
         self.stack.enter_context(patch('core.api.reminder_handler._wait_for_audio_completion',new=AsyncMock()))
         self.stack.enter_context(patch('core.device.face.send_face',new=AsyncMock()))
         async def output(conn,kind,audio,text,stream):
@@ -94,7 +96,7 @@ class OverlapDeliveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual('unknown',result[self.items[0]['attemptId']])
         self.assertEqual('retry',result[self.items[1]['attemptId']])
         # Preparation may finish in advance; only the first item may reach audio.
-        self.assertEqual(1,self.output.await_count)
+        self.assertEqual(1,sum(call.args[1]==SentenceType.FIRST for call in self.output.await_args_list))
         self.assertFalse(self.conn.chat_lock.locked())
 
     async def test_new_due_notice_hands_off_previous_melody_and_retains_its_members(self):
@@ -106,7 +108,9 @@ class OverlapDeliveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(old.released)
         self.assertEqual('sent',result[self.items[0]['attemptId']])
         self.assertIn(('older-id','old-stream'),self.conn.reminder_music.members)
-        self.command.assert_not_awaited()  # Handoff must not extend the earlier ACK window.
+        self.assertEqual({i['reminderId'] for i in self.items}, {call.args[1]['id'] for call in self.command.await_args_list})
+        self.assertTrue(all(call.args[1]['action']=='started' for call in self.command.await_args_list))
+        # Only the newly arriving members start rounds; the retained member is untouched.
 
     async def test_batch_replay_shares_receipts_and_reused_member_is_rejected(self):
         self.api.deliver_batch=AsyncMock(return_value={i['attemptId']:'sent' for i in self.items})

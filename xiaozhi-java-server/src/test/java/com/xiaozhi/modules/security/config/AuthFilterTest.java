@@ -19,7 +19,7 @@ import static org.mockito.Mockito.*;
 class AuthFilterTest {
     @Test void reminderInternalDefaultKeyRequiresLoopback() {
         checkReminderInternal("192.168.1.2","","xiaozhi-reminders",1,false);
-        checkReminderInternal("127.0.0.1","","xiaozhi-reminders",1,true);
+        checkReminderInternal("127.0.0.1","","xiaozhi-reminders",1,false);
         checkReminderInternal("127.0.0.1","","xiaozhi-python",1,false);
     }
     @Test void reminderInternalRequiresSingleOwnerEvenWithPrivateKey() {
@@ -53,12 +53,25 @@ class AuthFilterTest {
         checkToken(true);
     }
 
+    @Test void queryTokenCannotAuthenticateEvenWhenItMatchesAStoredToken() {
+        var filter=new AuthFilter();
+        var tokens=mock(UserTokenDao.class);
+        ReflectionTestUtils.setField(filter,"userTokenDao",tokens);
+        var exchange=MockServerWebExchange.from(MockServerHttpRequest.get("/xiaozhi/api/user/info?token=test-token"));
+        var called=new AtomicBoolean();
+        StepVerifier.create(filter.filter(exchange,x->{called.set(true);return Mono.empty();})).verifyComplete();
+        assertFalse(called.get());
+        assertEquals(HttpStatus.UNAUTHORIZED,exchange.getResponse().getStatusCode());
+        verifyNoInteractions(tokens);
+    }
+
     @Test void ambiguousServiceOwnerIsRejected() { checkService("",null,2L,false); }
     @Test void singleOwnerCompatibilityStillWorks() { checkService("",null,1L,true); }
     @Test void publicCompatibilityKeyCannotSelectAnotherOwner() { checkService("","7",1L,false); }
     @Test void privateKeyCanBindExplicitOwner() { checkService("private-test-key","7",2L,true); }
 
     private void checkService(String key,String owner,long count,boolean valid) {
+        if(key.isEmpty() && owner==null) key="test-private-memory";
         AuthFilter filter=new AuthFilter(); UserDao users=mock(UserDao.class);
         ReflectionTestUtils.setField(filter,"userDao",users);
         ReflectionTestUtils.setField(filter,"memoryServiceKey",key);
@@ -73,7 +86,7 @@ class AuthFilterTest {
         assertEquals(valid,called.get());
         if(!valid) {
             assertEquals(HttpStatus.UNAUTHORIZED,exchange.getResponse().getStatusCode());
-            assertEquals(owner!=null&&key.isEmpty()?"memory_owner_requires_private_key":"memory_owner_ambiguous",
+            assertEquals(owner!=null&&key.isEmpty()?"memory_service_key_invalid":"memory_owner_ambiguous",
                 exchange.getResponse().getHeaders().getFirst("X-Memory-Auth-Error"));
         }
         else assertEquals(7L,((UserEntity)exchange.getAttribute("currentUser")).getId());

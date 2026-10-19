@@ -1,13 +1,16 @@
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/xiaozhi?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: ${DB_USERNAME:root}
+    username: ${DB_USERNAME:xiaozhi}
     password: ${DB_PASSWORD:}
+
   liquibase:
     enabled: true
+
   devtools:
     restart:
       enabled: true
+
 logging:
   level:
     com.xiaozhi: warn

@@ -82,7 +82,7 @@ public:
     /** 线程安全地请求停止监听。 */
     void StopListening();
 
-    void Reboot();
+    void Reboot(const char* reason = "requested");
     void WakeWordInvoke(const std::string& wake_word);
     bool UpgradeFirmware(const std::string& url, const std::string& version = "");
     bool CanEnterSleepMode();

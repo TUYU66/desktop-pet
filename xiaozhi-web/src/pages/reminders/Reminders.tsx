@@ -1,3 +1,7 @@
+import { startPolling } from '../../utils/polling';
+import useServerClock from '../../hooks/useServerClock';
+import { reminderPhase } from '../../layouts/reminderPopupState';
+import PageDoodle from '../../components/PageDoodle';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { App, Alert, Button, Form, Input, Modal, Popconfirm, Select, Slider, Space, Spin, Tag } from 'antd';
 import { ClockCircleOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -14,9 +18,9 @@ const reminderStates: Record<string, [string, string]> = {
   scheduled: ['等待发送', 'blue'], dispatching: ['正在发送', 'processing'],
   awaiting_confirmation: ['等待回应', 'gold'], delivery_unknown: ['发送待核实', 'orange'],
   completed: ['已完成', 'green'], cancelled: ['已取消', 'default'], expired: ['已逾期', 'orange'],
-  retry_pending: ['等待下次提醒', 'gold'], missed: ['本轮未回应', 'orange'],
+  retry_pending: ['等待下次提醒', 'gold'], missed: ['已逾期', 'orange'],
 };
-const unanswered = new Set(['awaiting_confirmation', 'retry_pending', 'delivery_unknown', 'missed']);
+const unanswered = new Set(['scheduled', 'dispatching', 'awaiting_confirmation', 'retry_pending', 'delivery_unknown', 'missed', 'expired']);
 const legacyTerminal = new Set(['completed', 'cancelled', 'expired', 'missed']);
 const historyCategories = {
   expired: { label: '已逾期', color: 'orange' },
@@ -151,27 +155,34 @@ function ReminderMusicSettings({ refreshKey }: { refreshKey: number }) {
   const [trackError, setTrackError] = useState('');
   const [playbackWarning, setPlaybackWarning] = useState('');
   const alive = useRef(false);
-  const loadMusic = useCallback(async () => {
+  const readLife = useRef(0);
+  const loadMusic = useCallback(async (signal?: AbortSignal) => {
+    const generation = readLife.current;
+    const current = () => alive.current && generation === readLife.current && !signal?.aborted;
     try {
-      const result = await getReminderSettings();
-      if (!alive.current) return;
+      const result = await getReminderSettings(signal);
+      if (!current()) return;
       if (!Number.isInteger(result.data?.musicVolume) || result.data.musicVolume < 0 || result.data.musicVolume > 100) throw new Error('提醒音乐设置返回不完整');
       setMusicVolume(result.data.musicVolume); setMusicTrackId(result.data.musicTrackId || null); setMusicReady(true); setMusicError('');
-    } catch { if (alive.current) { setMusicReady(false); setMusicError('音乐设置读取失败，请刷新重试。'); } }
+    } catch { if (current()) { setMusicReady(false); setMusicError('音乐设置读取失败，请刷新重试。'); } return false; }
   }, []);
-  const loadTracks = useCallback(async () => {
+  const loadTracks = useCallback(async (signal: AbortSignal) => {
+    const generation = readLife.current;
+    const current = () => alive.current && generation === readLife.current && !signal.aborted;
     try {
-      const result = await request.get('/music');
-      if (!alive.current) return;
+      const result = await request.get('/music', { signal });
+      if (!current()) return;
       if (!Array.isArray(result.data?.tracks) || !result.data.tracks.every((track: { id: string; name: string }) => typeof track.id === 'string' && typeof track.name === 'string')) throw new Error('音乐库返回不完整');
       setTracks(result.data.tracks); setTracksReady(true); setTrackError('');
       setPlaybackWarning((result.data.devices || []).map((device: { reminderMusicWarning?: string }) => device.reminderMusicWarning).filter(Boolean).join('；'));
-    } catch { if (alive.current) { setTracksReady(false); setTrackError('音乐库暂时无法读取，仍可选择默认提醒音乐。'); } }
+    } catch { if (current()) { setTracksReady(false); setTrackError('音乐库暂时无法读取，仍可选择默认提醒音乐。'); } return false; }
   }, []);
   useEffect(() => {
-    alive.current = true; void loadMusic(); void loadTracks();
-    const timer = window.setInterval(() => { if (!document.hidden) void loadTracks(); }, 10000);
-    return () => { alive.current = false; window.clearInterval(timer); };
+    alive.current = true; ++readLife.current;
+    const controller = new AbortController();
+    void loadMusic(controller.signal);
+    const polling = startPolling(loadTracks, { interval: 30000, maxInterval: 120000 });
+    return () => { alive.current = false; ++readLife.current; controller.abort(); polling.stop(); };
   }, [loadMusic, loadTracks, refreshKey]);
   const save = async (field: 'track' | 'volume') => {
     if (saving || !musicReady) return;
@@ -221,19 +232,22 @@ export default function Reminders() {
   const life = useRef(0);
   const readEpoch = useRef(0);
   const readController = useRef<AbortController | null>(null);
-  const readPending = useRef<Promise<void> | null>(null);
+  const readPending = useRef<Promise<boolean | void> | null>(null);
   const writeLock = useRef(false);
   const refreshBadge = () => window.dispatchEvent(new Event('xiaozhi:reminders-state'));
   const stopRead = useCallback(() => { readEpoch.current += 1; readController.current?.abort(); }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     const epoch = readEpoch.current;
-    if (!alive.current || document.hidden || writeLock.current) return;
+    if (!alive.current || document.hidden || writeLock.current || signal?.aborted) return;
+    if (readPending.current && !readController.current?.signal.aborted) return readPending.current;
     if (readPending.current) await readPending.current;
-    if (!alive.current || document.hidden || writeLock.current || epoch !== readEpoch.current) return;
+    if (!alive.current || document.hidden || writeLock.current || epoch !== readEpoch.current || signal?.aborted) return;
     if (readPending.current) return readPending.current;
     const controller = new AbortController();
     readController.current = controller;
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
     setLoading(true);
     const current = () => alive.current && !document.hidden && epoch === readEpoch.current && !controller.signal.aborted;
     const run = (async () => {
@@ -246,11 +260,13 @@ export default function Reminders() {
         setReadError('');
       } catch (error) {
         if (current()) setReadError(errorText(error));
-      } finally { if (current()) setLoading(false); }
+        return false;
+      } finally { signal?.removeEventListener('abort', abort); if (current()) setLoading(false); }
     })();
     readPending.current = run;
-    await run;
+    const result = await run;
     if (readPending.current === run) readPending.current = null;
+    return result;
   }, []);
 
   const loadDevices = useCallback(async () => {
@@ -275,11 +291,10 @@ export default function Reminders() {
   }, [loadDevices, stopRead]);
   useEffect(() => {
     stopRead();
-    void load();
-    const timer = window.setInterval(() => { void load(); }, 4000);
-    const visibility = () => { stopRead(); if (!document.hidden) void load(); };
+    const polling = startPolling(signal => load(signal), { interval: 4000, maxInterval: 30000 });
+    const visibility = () => { if (document.hidden) stopRead(); };
     document.addEventListener('visibilitychange', visibility);
-    return () => { stopRead(); window.clearInterval(timer); document.removeEventListener('visibilitychange', visibility); };
+    return () => { stopRead(); polling.stop(); document.removeEventListener('visibilitychange', visibility); };
   }, [load, stopRead]);
 
   const fresh = !!snapshot && !readError;
@@ -349,8 +364,10 @@ export default function Reminders() {
     }
   };
   const data = snapshot?.data;
+  const displayNow = useServerClock(data?.serverNow);
+  const pendingItems = data?.items.filter(item => ['retry_pending', 'expired', 'missed', 'delivery_unknown'].includes(item.status)) || [];
   const visiblePlans = data?.plans.filter(plan => plan.status === 'active' || plan.status === 'paused') || [];
-  const legacyActive = data?.items.filter(item => !legacyTerminal.has(item.status)) || [];
+  const legacyActive = data?.items.filter(item => !legacyTerminal.has(item.status) && !pendingItems.includes(item)) || [];
   const history = (data?.items.filter(item => legacyTerminal.has(item.status)) || []).sort((a, b) => b.scheduledAt - a.scheduledAt);
   const filteredHistory = historyFilter === 'all' ? history : history.filter(item => historyCategory(item) === historyFilter);
   const historyCounts = {
@@ -363,7 +380,7 @@ export default function Reminders() {
   const visibleHistoryPage = Math.min(historyPage, historyPages);
   const historyItems = filteredHistory.slice((visibleHistoryPage - 1) * 6, visibleHistoryPage * 6);
   const legacyButtons = (item: Reminder, highlight = false) => <Space size={highlight ? 8 : 4} wrap>
-    {unanswered.has(item.status) && <><Button size="small" type={highlight ? 'primary' : 'default'} disabled={disabled} onClick={() => void legacyAction(item, 'confirm')}>知道了</Button>
+    {unanswered.has(item.status) && item.dueAt <= displayNow && <><Button size="small" type={highlight ? 'primary' : 'default'} disabled={disabled} onClick={() => void legacyAction(item, 'confirm')}>知道了</Button>
       <Button size="small" disabled={disabled} onClick={() => void legacyAction(item, 'snooze')}>5分钟后提醒</Button></>}
     {!legacyTerminal.has(item.status) && <><Button size="small" disabled={disabled} onClick={() => { setLegacyEditing(item); legacyForm.setFieldsValue({ title: item.title, date: inputDate(item.scheduledAt || item.dueAt) }); }}>修改提醒</Button>
       <Popconfirm title="取消后续提醒？" onConfirm={() => void legacyAction(item, 'cancel')}><Button size="small" disabled={disabled}>取消提醒</Button></Popconfirm></>}
@@ -372,9 +389,17 @@ export default function Reminders() {
   </Space>;
 
   return <div className="reminders-page page-width">
-    <header className="page-heading"><div><h1><ClockCircleOutlined /> 日程提醒</h1><p>安排单次或周期提醒，到点由设备通知。</p></div>
+    <header className="page-heading"><div><h1>日程提醒<PageDoodle kind="reminder" /></h1><p>安排单次或周期提醒，到点由设备通知。</p></div>
       <Button icon={<ReloadOutlined />} onClick={manualRefresh} disabled={!!working}>刷新</Button></header>
     {readError && <Alert type="warning" showIcon title={'日程列表读取失败：' + readError} description={snapshot ? '保留上次读取的内容，操作暂不可用。请刷新核实。' : '请刷新重试。'} />}
+    {pendingItems.length > 0 && <section className="surface reminder-pending" aria-labelledby="reminder-pending-title">
+      <div className="section-heading"><h2 id="reminder-pending-title">有 {pendingItems.length} 条提醒需要处理</h2><Button onClick={() => window.dispatchEvent(new Event('xiaozhi:open-reminders'))}>集中回应或延后</Button></div>
+      <p className="task-list-note">等待再提醒和逾期的事项都可以在这里回应。点击“知道了”表示收到提醒。</p>
+      {pendingItems.map(item => <article className="reminder-pending-row" key={item.id}>
+        <div><h3>{item.title}</h3><p role="status">{reminderPhase(item, displayNow)}</p><small>原定时间：{dateLabel(item.scheduledAt || item.originalDueAt || item.dueAt)}</small></div>
+        {legacyButtons(item, true)}
+      </article>)}
+    </section>}
     {snapshot && snapshot.data.itemTotal > snapshot.data.items.length && <Alert type="info" showIcon title={`当前展示 ${snapshot.data.items.length} / ${snapshot.data.itemTotal} 条提醒；未回应总数 ${snapshot.data.unansweredCount} 按全部未删除记录统计。`} />}
     {loading && <div className="task-loading" role="status"><Spin size="small" /><span>正在读取日程</span></div>}
     <div className="reminder-workspace"><div className="schedule-panels">
@@ -402,7 +427,7 @@ export default function Reminders() {
             return <article className={`active-reminder${unanswered.has(item.status) ? ' needs-response' : ''}`} key={item.id}>
               <div className="active-reminder-time"><span>本次安排</span><time dateTime={new Date(arranged).toISOString()} aria-label={dateLabel(arranged)}><strong>{time.clock}</strong><span>{time.date}</span></time></div>
               <div className="active-reminder-content"><div className="active-reminder-heading"><h3>{item.title}</h3><Tag color={reminderStates[item.status][1]}>{reminderStates[item.status][0]}</Tag></div>
-                <p className="active-reminder-kind">{item.planId ? '周期中的本次提醒' : '单次提醒'}</p>
+                <p className="reminder-phase">{reminderPhase(item, displayNow)}</p><p className="active-reminder-kind">{item.planId ? '周期中的本次提醒' : '单次提醒'}</p>
                 <p className="active-reminder-hint">{queueHint(item)}</p>
                 {item.lastError && <p className="active-reminder-error" role="alert">{item.lastError}</p>}
                 <details className="active-reminder-details"><summary>时间与发送详情</summary><ReminderDetails reminder={item} remindAt={item.originalDueAt || item.dueAt} showError={false} /></details>
@@ -416,7 +441,7 @@ export default function Reminders() {
       </div>
     </div>
     {data && <details className="surface reminder-history"><summary><span>日程提醒历史 <strong>{history.length} 条</strong></span><span className="history-summary-hint">保留7天</span></summary>
-      <p className="task-list-note">已结束的日程提醒保留7天，周期计划不受历史清理影响。</p>
+      <p className="task-list-note">已确认和取消的提醒保留7天；逾期未回应的事项保留到你处理，周期计划不受影响。</p>
       <div className="history-filters" role="group" aria-label="日程提醒历史分类">
         {(['all', 'expired', 'cancelled', 'completed'] as const).map(category => <Button key={category}
           type={historyFilter === category ? 'primary' : 'default'} aria-pressed={historyFilter === category}

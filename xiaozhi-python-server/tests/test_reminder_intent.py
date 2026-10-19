@@ -19,9 +19,9 @@ class ReminderIntentTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_semantic_reply_executes_validated_target(self):
         self.conn.llm.response_json.return_value=json.dumps({'action':'confirm','targetId':'r1'})
-        with patch('core.reminders.client.state',AsyncMock(return_value={'serverNow':0,'items':[self.item],'plans':[]})), patch('core.reminders.client.command',AsyncMock(return_value={})) as command, patch('core.device.face.send_face',AsyncMock()):
+        with patch('core.reminders.client.state',AsyncMock(return_value={'serverNow':0,'items':[self.item],'plans':[]})), patch('core.reminders.client.command',AsyncMock(return_value=dict(id='r1',status='completed',version=4))) as command, patch('core.device.face.send_face',AsyncMock()):
             answer=await respond(self.conn,'这就去休息，谢谢你')
-            self.assertIn('提醒结束',answer)
+            self.assertIn('收到了',answer)
             command.assert_awaited_once_with('test',{'action':'confirm','id':'r1','version':3})
 
     async def test_negative_and_unrelated_never_use_keyword_confirm(self):
@@ -34,7 +34,7 @@ class ReminderIntentTests(unittest.IsolatedAsyncioTestCase):
     async def test_model_failure_does_not_close(self):
         self.conn.llm.response_json.side_effect=ValueError('bad json')
         with patch('core.reminders.client.state',AsyncMock(return_value={'serverNow':0,'items':[self.item],'plans':[]})), patch('core.reminders.client.command',AsyncMock()) as command:
-            self.assertIn('保持不变',await respond(self.conn,'知道了'))
+            self.assertIn('保持不变',await respond(self.conn,'这个提醒我该怎么处理'))
             command.assert_not_awaited()
 
     async def test_snooze_is_not_confirmation(self):

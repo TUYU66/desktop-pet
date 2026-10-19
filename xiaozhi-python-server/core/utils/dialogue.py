@@ -1,6 +1,8 @@
 import uuid
 import re
 import threading
+from copy import copy
+from bisect import bisect_right
 from typing import List, Dict, Optional
 from datetime import datetime
 
@@ -148,33 +150,61 @@ class Dialogue:
             self.put(Message(role="system", content=new_content))
 
     def _ensure_tool_calls_complete(self, messages: List[Message]) -> List[Message]:
+        """Build a provider-valid view without mutating or deleting stored history.
+
+        Results must immediately follow their assistant call, before the next
+        user turn. Late results are paired by ID within that ID's call lifetime;
+        missing results stay unknown. Orphan/duplicate tool metadata is omitted
+        from this view only, while the original Message objects remain intact.
         """
-        确保所有 tool_calls 都有对应的 tool 响应
-        修复被打断导致的悬空 tool_calls，防止大模型 API 报 400 错误
-        """
-        pending_tool_calls = set()
+        calls = {}
+        responses = {}
+        for index, message in enumerate(messages):
+            if message.role == "assistant" and message.tool_calls is not None:
+                unique = {}
+                for call in message.tool_calls:
+                    identity = call.get("id") if isinstance(call, dict) else getattr(call, "id", None)
+                    if isinstance(identity, str) and identity:
+                        unique.setdefault(identity, call)
+                calls[index] = unique
+            elif message.role == "tool" and isinstance(message.tool_call_id, str):
+                responses.setdefault(message.tool_call_id, []).append(index)
+
+        ends = {}
+        next_call = {}
+        for index, identities in reversed(list(calls.items())):
+            for identity in identities:
+                ends[index, identity] = next_call.get(identity, len(messages))
+                next_call[identity] = index
+
         result = []
-
-        for msg in messages:
-            result.append(msg)
-
-            if msg.role == "assistant" and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    tc_id = tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)
-                    if tc_id:
-                        pending_tool_calls.add(tc_id)
-
-            elif msg.role == "tool" and msg.tool_call_id:
-                pending_tool_calls.discard(msg.tool_call_id)
-
-        for missing_id in pending_tool_calls:
-            dummy_tool_msg = Message(
-                role="tool",
-                content='{"status": "interrupted", "message": "动作已取消/被打断"}',
-                tool_call_id=missing_id
-            )
-            result.append(dummy_tool_msg)
-
+        for index, message in enumerate(messages):
+            if index in calls:
+                identities = calls[index]
+                if not identities:
+                    if message.content:
+                        plain = copy(message)
+                        plain.tool_calls = None
+                        result.append(plain)
+                    continue
+                assistant = copy(message)
+                assistant.tool_calls = list(identities.values())
+                result.append(assistant)
+                for identity in identities:
+                    candidates = responses.get(identity, [])
+                    offset = bisect_right(candidates, index)
+                    position = candidates[offset] if offset < len(candidates) else len(messages)
+                    if position < ends[index, identity]:
+                        response = copy(messages[position])
+                        response.content = "" if response.content is None else str(response.content)
+                        if any(item.role != "tool" for item in messages[index + 1:position]):
+                            response.content = "【结果在后续对话之后延迟到达，现补齐历史配对】\n" + response.content
+                    else:
+                        response = Message(role="tool", tool_call_id=identity,
+                            content='{"status":"unknown","message":"工具结果尚未收到，动作是否执行或完成待核实，请勿自动重试"}')
+                    result.append(response)
+            elif message.role != "tool":
+                result.append(message)
         return result
 
     def get_llm_dialogue_with_memory(

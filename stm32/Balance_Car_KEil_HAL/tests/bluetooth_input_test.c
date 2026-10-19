@@ -7,12 +7,20 @@
 
 /* Replace the board header with the minimal hardware boundary. */
 #define __APP_BLUETOOTH_H_
+#define CHASSIS_LINK_H
 typedef uint8_t u8;
 typedef enum { enSTOP, enRUN, enBACK, enLEFT, enRIGHT, enTLEFT, enTRIGHT } enCarState;
-float Balance_Kp = 9600, Balance_Kd = 56, Velocity_Kp = 6200, Velocity_Ki = 15;
+volatile float Balance_Kp = 9600, Balance_Kd = 56, Velocity_Kp = 6200, Velocity_Ki = 15;
 float Turn_Kp = 1700, Turn_Kd = 20;
 float Velocity_Left, Velocity_Right, Acceleration_Z, Gyro_Balance, battery = 11.4f;
 static u8 control_enabled, calibration_active;
+u8 Stop_Flag;
+static char last_reply[80];
+static unsigned int app_request_id, app_request_target;
+void ChassisLink_AppBluetoothRequest(unsigned int id, unsigned int target) {app_request_id=id;app_request_target=target;}
+void ChassisLink_AppBluetoothStatus(char *buffer, unsigned int size) {
+    snprintf(buffer,size,"$BT,EN%u,SF%u,VB11400,AP1,RQ0,RS0#",control_enabled,Stop_Flag);
+}
 static unsigned int moves;
 static enCarState last_move;
 uint32_t __get_PRIMASK(void) { return 0; }
@@ -22,7 +30,7 @@ u8 Chassis_CalibrationActive(void) { return calibration_active; }
 u8 Chassis_BluetoothEnabled(void) { return control_enabled; }
 void Chassis_BluetoothMove(enCarState state) { ++moves; last_move = state; }
 void delay_ms(int milliseconds) { (void)milliseconds; }
-void UART5_Send_Char(char *text) { (void)text; }
+void UART5_Send_Char(char *text) { snprintf(last_reply, sizeof(last_reply), "%s", text); }
 void ProtocolGetPID(void);
 
 #include "../BSP/Bluetooth/app_bluetooth.c"
@@ -45,8 +53,25 @@ int main(void)
     packet("$0,2,0,0,0,0,0,0,0,0#");
     assert(moves == 2 && last_move == enTRIGHT);
 
+    packet("$0,0,0,0,0,0,0,1,0,0#");
+    assert(moves == 2 && strstr(last_reply, "$BT,EN1,SF0,VB11400,AP1,RQ0,RS0#"));
+    packet("$1,0,0,0,0,0,0,1,0,0#"); /* malformed query cannot move */
+    assert(moves == 2);
+    packet("$BC,1,65535#");
+    assert(app_request_id == 65535 && app_request_target == 1 && moves == 2);
+    packet("$BC,0,12#");
+    assert(app_request_id == 12 && app_request_target == 0 && moves == 2);
+    packet("$BC,1,65536#");
+    assert(app_request_id == 12 && moves == 2);
+    packet("$BC,1,12x#");
+    assert(app_request_id == 12 && moves == 2);
+
     /* After revocation, continued phone packets cannot move or change PID. */
     control_enabled = 0;
+    Stop_Flag = 1;
+    packet("$0,0,0,0,0,0,0,1,0,0#");
+    assert(moves == 2 && strstr(last_reply, "$BT,EN0,SF1,VB11400,AP1,RQ0,RS0#"));
+    Stop_Flag = 0;
     packet("$1,0,0,0,1,0,0,AP12,AD3#");
     packet("$0,1,0,0,0,0,0,0,0,0#");
     assert(moves == 2 && Balance_Kp == 9600 && Balance_Kd == 56);

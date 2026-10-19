@@ -32,6 +32,9 @@ static uint8_t posture_bluetooth; /* 0=posture, 1=enable, 2=off/resting, 3=off/s
 /* Foreground session state: repeated ON must not overwrite the original pose.
  * A failed return-to-rest retains its goal for an explicit OFF retry. */
 static uint8_t bluetooth_return_to_rest, bluetooth_enable_from_rest;
+#include "bluetooth_app_session.h"
+static BluetoothAppSession app_bt;
+static unsigned int posture_app_id, app_bt_native_sequence, app_bt_acquired_id;
 static uint32_t posture_started_ms, posture_result_ms;
 static char posture_result[48];
 /* Lifetime counts: crc, framing, overrun, ring full, frame, parity, noise, resync. */
@@ -112,6 +115,52 @@ static void stand_reply(unsigned int sequence, const char *error)
     send_line(response);
 }
 
+static void cancel_bluetooth_rise(void)
+{
+    if (posture_sequence && posture_bluetooth == 1) {
+        bluetooth_return_to_rest = bluetooth_enable_from_rest;
+        posture_result_sequence = posture_sequence;
+        posture_result_ms = HAL_GetTick();
+        snprintf(posture_result, sizeof(posture_result), "BT_ABORT,%u,STAND\n", posture_sequence);
+        send_line(posture_result);
+        posture_sequence = posture_bluetooth = 0;
+    }
+}
+
+static void abort_app_bluetooth_on(void)
+{
+    /* A failed App announcement must not cancel an unrelated voice-initiated rise. */
+    if (posture_bluetooth == 1 && posture_sequence && posture_app_id == app_bt.id) {
+        Chassis_SetBluetooth(0);
+        cancel_bluetooth_rise();
+    } else if (app_bt_acquired_id == app_bt.id && app_bt.id) {
+        Chassis_SetBluetooth(0);
+    }
+}
+
+void ChassisLink_AppBluetoothRequest(unsigned int identifier, unsigned int enabled)
+{
+    if (!identifier || identifier > 65535U || enabled > 1U) return;
+    if (!BluetoothApp_Begin(&app_bt, identifier, enabled, HAL_GetTick())) return;
+    app_bt_native_sequence = app_bt_acquired_id = 0;
+    if (enabled && posture_sequence && posture_bluetooth == 1 && posture_app_id)
+        posture_app_id = identifier; /* Latest explicit ON keeps the same pending physical goal. */
+    if (!enabled) {
+        Chassis_SetBluetooth(0);
+        Bluetooth_DiscardInput();
+        cancel_bluetooth_rise();
+    }
+}
+
+void ChassisLink_AppBluetoothStatus(char *buffer, unsigned int capacity)
+{
+    long millivolts = battery >= 0 && battery <= 20 ? (long)(battery * 1000.0f) : 0;
+    BluetoothApp_Observe(&app_bt, HAL_GetTick());
+    snprintf(buffer, capacity, "$BT,EN%u,SF%u,VB%ld,AP1,RQ%u,RS%u#",
+             (unsigned int)Chassis_BluetoothEnabled(), (unsigned int)(Stop_Flag != 0), millivolts,
+             app_bt.id, (unsigned int)app_bt.result);
+}
+
 /* Rejections are terminal results too. Recover a lost ERR by querying the
  * same ID, without retransmitting a physical movement command. */
 static void turn_reject(unsigned int sequence, const char *error)
@@ -126,6 +175,9 @@ static void turn_reject(unsigned int sequence, const char *error)
  * Old peers receive no fake posture completion; updated ESP32 parses all four fields. */
 static void bluetooth_done(unsigned int sequence, u8 enabled, u8 pose)
 {
+    if (enabled && app_bt.result == 1 && app_bt.target &&
+        (sequence == app_bt_native_sequence || (sequence == posture_sequence && posture_app_id == app_bt.id)))
+        app_bt_acquired_id = app_bt.id;
     posture_result_sequence = sequence;
     posture_result_ms = HAL_GetTick();
     snprintf(posture_result, sizeof(posture_result), "BT_DONE,%u,%u,%u\n",
@@ -381,12 +433,40 @@ static void handle_line(void)
             send_line(response);
         }
     }
+    else if (strcmp(line, "BT_REVOKE") == 0)
+    {
+        Chassis_SetBluetooth(0);
+        Bluetooth_DiscardInput();
+        if (app_bt.result == 1 && app_bt.target) app_bt.result = 3;
+        cancel_bluetooth_rise();
+        send_line("BT_REVOKED,0\n");
+    }
+    else if (strncmp(line, "APP_RESULT,", 11) == 0)
+    {
+        long values[2];
+        if (!calibration_fields(line + 11, values, 2) || (values[1] != 0 && values[1] != 1)) return;
+        if (BluetoothApp_Complete(&app_bt, (unsigned int)values[0], values[1] != 0, Chassis_BluetoothEnabled(), Stop_Flag != 0) &&
+            app_bt.result == 3 && app_bt.target) abort_app_bluetooth_on();
+    }
     else if (strncmp(line, "BT,", 3) == 0 && (line[3] == '0' || line[3] == '1') && line[4] == ',')
     {
         unsigned int sequence;
+        unsigned int app_identifier = 0;
         u8 enabled = line[3] == '1';
         u8 seated;
-        if (!parse_sequence(line + 5, &sequence) || sequence == 0) return;
+        if (strchr(line + 5, ',')) {
+            long values[2];
+            if (!calibration_fields(line + 5, values, 2) || values[0] < 1 || values[1] < 1) return;
+            sequence = (unsigned int)values[0];
+            app_identifier = (unsigned int)values[1];
+            if (!BluetoothApp_CanExecute(&app_bt, (unsigned int)values[1], enabled)) {
+                stand_reply(sequence, "CANCELLED"); return;
+            }
+            app_bt_native_sequence = sequence;
+        } else {
+            if (!parse_sequence(line + 5, &sequence) || sequence == 0) return;
+            if (!enabled && app_bt.result == 1 && app_bt.target) app_bt.result = 3;
+        }
         if (sequence == posture_result_sequence) posture_result[0] = 0;
         if (!enabled) {
             /* Revoke phone motion before any busy/posture check or reply. */
@@ -456,6 +536,7 @@ static void handle_line(void)
             return;
         }
         posture_sequence = sequence;
+        posture_app_id = app_identifier;
         posture_started_ms = HAL_GetTick();
         posture_result[0] = 0;
         stand_reply(sequence, 0);
@@ -625,6 +706,17 @@ void ChassisLink_Poll(void)
     Chassis_CalibrationWatchdog();
     Chassis_GyroWatchdog();
     Chassis_BluetoothWatchdog();
+    if (app_bt.result == 1) {
+        uint32_t now = HAL_GetTick();
+        if (BluetoothApp_Expired(&app_bt, now)) {
+            app_bt.result = 3;
+            if (app_bt.target) abort_app_bluetooth_on();
+        } else if (BluetoothApp_Forward(&app_bt, now)) {
+            char request[40];
+            snprintf(request, sizeof(request), "APP_REQ,%u,%u\n", app_bt.id, (unsigned int)app_bt.target);
+            send_line(request);
+        }
+    }
     {
         u8 fault = Chassis_MotionWatchdog();
         if (fault == 1) send_line("FAULT,IMU_TIMEOUT\n");
@@ -777,7 +869,7 @@ void ChassisLink_Poll(void)
     if ((uint32_t)(HAL_GetTick() - last_baseline_report_ms) >= 10000U) {
         static char baseline[192];
         last_baseline_report_ms = HAL_GetTick();
-        send_line("DIAG,FW,2026100501,2,2047\n");
+        send_line("DIAG,FW,2026101201,2,2047\n");
         Chassis_FormatBaseline(baseline, sizeof(baseline));
         send_line(baseline);
         Motor_FormatCompensation(baseline, sizeof(baseline));

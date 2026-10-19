@@ -164,7 +164,7 @@ async def _run_chassis_after_speech(conn: "ConnectionHandler", pending: dict):
                    "好的，我休息咯。": "好，正在往后靠。",
                    "这次没转好，我先不继续转了，帮我看一下姿态吧。":
                        "这次动作没能完整做完。"}.get(outcome, outcome)
-        from core.handle.reportHandle import enqueue_tool_report
+        from core.reporting.chat_reports import enqueue_tool_report
         enqueue_tool_report(conn, pending["name"], pending["arguments"], outcome, report_tool_call=False)
         completed_turns = {
             "self_chassis_turn_left": "好，我向左转过来啦。",

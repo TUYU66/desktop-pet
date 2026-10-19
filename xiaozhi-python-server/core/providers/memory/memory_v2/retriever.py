@@ -25,14 +25,7 @@ from .models import (
 
 
 def normalized(value):
-    return "".join(
-        unicodedata.normalize(
-            "NFKC",
-            str(value or ""),
-        )
-        .casefold()
-        .split()
-    )
+    return "".join(unicodedata.normalize("NFKC", str(value or "")).casefold().split())
 
 
 def tokens(value):
@@ -44,17 +37,11 @@ def tokens(value):
     但语义重叠计算时主要使用双字以上token，
     降低中文常见单字造成的噪声。
     """
-    parts = re.findall(
-        r"[a-z0-9]+|[\u4e00-\u9fff]",
-        normalized(value),
-    )
+    parts = re.findall(r"[a-z0-9]+|[\u4e00-\u9fff]", normalized(value))
 
     result = set(parts)
 
-    result.update(
-        a + b
-        for a, b in zip(parts, parts[1:])
-    )
+    result.update(a + b for a, b in zip(parts, parts[1:]))
 
     return result
 
@@ -97,12 +84,7 @@ def semantic_tokens(value):
     中文单字很容易造成随机碰撞，
     因此这里只使用长度 >= 2 的token。
     """
-    return {
-        token
-        for token in tokens(value)
-        if len(token) >= 2
-        and token not in _GENERIC_TERMS
-    }
+    return {token for token in tokens(value) if len(token) >= 2 and token not in _GENERIC_TERMS}
 
 
 def specific_keywords(intent):
@@ -150,37 +132,19 @@ def relevance_score(row, intent):
     判断是否值得作为候选交给Decision。
     """
 
-    corpus = " ".join(
-        str(row.get(name, ""))
-        for name in (
-            "key",
-            "content",
-            "source",
-        )
-    )
+    corpus = " ".join(str(row.get(name, "")) for name in ("key", "content", "source"))
 
     corpus_norm = normalized(corpus)
 
     keywords = specific_keywords(intent)
 
-    keyword_hits = sum(
-        1
-        for keyword in keywords
-        if keyword in corpus_norm
-    )
+    keyword_hits = sum(1 for keyword in keywords if keyword in corpus_norm)
 
-    query_tokens = semantic_tokens(
-        intent.query
-    )
+    query_tokens = semantic_tokens(intent.query)
 
-    corpus_tokens = semantic_tokens(
-        corpus
-    )
+    corpus_tokens = semantic_tokens(corpus)
 
-    overlap = len(
-        query_tokens
-        & corpus_tokens
-    )
+    overlap = len(query_tokens & corpus_tokens)
 
     # ---------------------------------------------
     # 最低准入门槛
@@ -191,32 +155,20 @@ def relevance_score(row, intent):
     # 数据库有记录 ≠ 一定存在相关旧记忆。
     # ---------------------------------------------
 
-    if (
-        keyword_hits == 0
-        and overlap == 0
-    ):
+    if keyword_hits == 0 and overlap == 0:
         return None
 
     score = 0.0
 
     # LLM明确给出的关键词命中权重最高。
-    score += (
-        keyword_hits
-        * 6.0
-    )
+    score += keyword_hits * 6.0
 
     # retrievalQuery 和旧记忆的文本重叠。
-    score += (
-        overlap
-        * 1.5
-    )
+    score += overlap * 1.5
 
     # 关键词覆盖程度。
     if keywords:
-        score += (
-            keyword_hits
-            / len(keywords)
-        )
+        score += keyword_hits / len(keywords)
 
     return score
 
@@ -229,83 +181,40 @@ def read_snapshot(snapshot):
 
 
 def _read_snapshot(snapshot):
-    if (
-        not isinstance(snapshot, dict)
-        or not isinstance(
-            snapshot.get("memories"),
-            list,
-        )
-    ):
-        raise ProtocolError(
-            "snapshot_unavailable"
-        )
+    if not isinstance(snapshot, dict) or not isinstance(snapshot.get("memories"), list):
+        raise ProtocolError("snapshot_unavailable")
 
-    revision = integer(
-        snapshot.get("revision"),
-        "snapshot_revision_invalid",
-        0,
-    )
+    revision = integer(snapshot.get("revision"), "snapshot_revision_invalid", 0)
 
     rows = []
     ids = set()
 
     for raw in snapshot["memories"]:
         if not isinstance(raw, dict):
-            raise ProtocolError(
-                "snapshot_record_invalid"
-            )
+            raise ProtocolError("snapshot_record_invalid")
 
-        ident = integer(
-            raw.get("id"),
-            "snapshot_id_invalid",
-        )
+        ident = integer(raw.get("id"), "snapshot_id_invalid")
 
         if (
             ident in ids
-            or raw.get("category")
-            not in CATEGORIES
-            or raw.get("status")
-            not in {
-                "active",
-                "closed",
-                "invalidated",
-            }
+            or raw.get("category") not in CATEGORIES
+            or raw.get("status") not in {"active", "closed", "invalidated"}
         ):
-            raise ProtocolError(
-                "snapshot_record_invalid"
-            )
+            raise ProtocolError("snapshot_record_invalid")
 
         ids.add(ident)
 
         row = {
             "id": ident,
-            "version": integer(
-                raw.get("version"),
-                "snapshot_version_invalid",
-            ),
+            "version": integer(raw.get("version"), "snapshot_version_invalid"),
             "category": raw["category"],
-            "key": text(
-                raw.get("key"),
-                "snapshot_key_invalid",
-                120,
-            ),
-            "content": text(
-                raw.get("content"),
-                "snapshot_content_invalid",
-                2000,
-            ),
-            "source": text(
-                raw.get("source"),
-                "snapshot_source_invalid",
-                2000,
-            ),
+            "key": text(raw.get("key"), "snapshot_key_invalid", 120),
+            "content": text(raw.get("content"), "snapshot_content_invalid", 2000),
+            "source": text(raw.get("source"), "snapshot_source_invalid", 2000),
             "status": raw["status"],
         }
 
-        for name in (
-            "observedAt",
-            "time",
-        ):
+        for name in ("observedAt", "time"):
             if name in raw:
                 row[name] = raw[name]
 
@@ -314,23 +223,11 @@ def _read_snapshot(snapshot):
     return revision, tuple(rows)
 
 
-async def retrieve(
-    store: MemoryStore,
-    role_id,
-    intents,
-    limit=16,
-    char_budget=9000,
-) -> RecallBatch:
+async def retrieve(store: MemoryStore, role_id, intents, limit=16, char_budget=9000) -> RecallBatch:
 
-    revision, records = read_snapshot(
-        await store.snapshot(role_id)
-    )
+    revision, records = read_snapshot(await store.snapshot(role_id))
 
-    eligible = [
-        record
-        for record in records
-        if record["status"] != "invalidated"
-    ]
+    eligible = [record for record in records if record["status"] != "invalidated"]
 
     # 每个intent建立自己的“真正相关候选队列”。
     queues = []
@@ -341,36 +238,18 @@ async def retrieve(
         scored = []
 
         for row in eligible:
-            score = relevance_score(
-                row,
-                intent,
-            )
+            score = relevance_score(row, intent)
 
             if score is None:
                 continue
 
             positive_ids.add(row["id"])
 
-            scored.append(
-                (
-                    score,
-                    row,
-                )
-            )
+            scored.append((score, row))
 
-        scored.sort(
-            key=lambda item: (
-                -item[0],
-                item[1]["id"],
-            )
-        )
+        scored.sort(key=lambda item: (-item[0], item[1]["id"]))
 
-        queues.append(
-            [
-                row
-                for _score, row in scored
-            ]
-        )
+        queues.append([row for _score, row in scored])
 
     # --------------------------------------------------
     # 很重要：
@@ -382,24 +261,13 @@ async def retrieve(
     # --------------------------------------------------
 
     if not positive_ids:
-        return RecallBatch(
-            revision,
-            (),
-            records,
-            0,
-        )
+        return RecallBatch(revision, (), records, 0)
 
     selected = []
     seen = set()
     used = 0
 
-    max_depth = max(
-        (
-            len(queue)
-            for queue in queues
-        ),
-        default=0,
-    )
+    max_depth = max((len(queue) for queue in queues), default=0)
 
     # 多个检索主题轮流贡献候选，
     # 防止单一主题占满全部预算。
@@ -413,18 +281,9 @@ async def retrieve(
             if row["id"] in seen:
                 continue
 
-            size = len(
-                json.dumps(
-                    row,
-                    ensure_ascii=False,
-                )
-            )
+            size = len(json.dumps(row, ensure_ascii=False))
 
-            if (
-                used + size
-                > char_budget
-                or len(selected) >= limit
-            ):
+            if used + size > char_budget or len(selected) >= limit:
                 continue
 
             seen.add(row["id"])
@@ -440,15 +299,6 @@ async def retrieve(
     # “真正相关但因为limit/budget未展示”的数量。
     #
     # 不再把数据库里所有无关记忆算进去。
-    omitted = max(
-        0,
-        len(positive_ids)
-        - len(selected),
-    )
+    omitted = max(0, len(positive_ids) - len(selected))
 
-    return RecallBatch(
-        revision,
-        tuple(selected),
-        records,
-        omitted,
-    )
+    return RecallBatch(revision, tuple(selected), records, omitted)

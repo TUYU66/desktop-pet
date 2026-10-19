@@ -22,4 +22,7 @@
     <include file="db/changelog/v1.9.1_todo_schedule_split.xml"/>
     <include file="db/changelog/v1.9.2_reminder_scheduled_at.xml"/>
     <include file="db/changelog/v1.9.3_reminder_creation.xml"/>
+    <include file="db/changelog/v1.9.4_reminder_round.xml"/>
+    <include file="db/changelog/v1.9.5_reminder_45_seconds.xml"/>
+    <include file="db/changelog/v1.9.6_reminder_deadline_indexes.xml"/>
 </databaseChangeLog>

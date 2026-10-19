@@ -11,6 +11,7 @@ export interface Reminder {
   planId?: string;
   deliveryCount: number;
   ackDeadline: number;
+  roundStartedAt?: number;
   nextAttemptAt: number;
   originalDueAt: number;
   scheduledAt: number;
@@ -26,11 +27,12 @@ export interface CreationReceipt {
 export const getReminders = (signal?: AbortSignal) => request.get<unknown, { data: ReminderPage }>('/reminders', { signal });
 export const deleteReminderHistory = (item: Reminder) => request.delete(`/reminders/${item.id}`, { params: { version: item.version } });
 export const getReminderDevices = () => request.get('/reminders/devices');
-export const getReminderSettings = () => request.get('/reminders/settings');
+export const getReminderSettings = (signal?: AbortSignal) => request.get('/reminders/settings', { signal });
 export const saveReminderMusicVolume = (musicVolume: number) => request.put('/reminders/settings', { musicVolume });
 export const saveReminderMusicSettings = (settings: { musicVolume?: number; musicTrackId?: string | null }) => request.put('/reminders/settings', settings);
 export const createReminder = (data: { requestId: string; deviceId: string; title: string; seconds?: number; triggerAt?: number; recurrence?: string }) => request.post<unknown, { data: CreationReceipt }>('/reminders', data);
 export const reminderAction = (item: Reminder, action: 'confirm' | 'snooze' | 'cancel', seconds = 300) =>
   request.post(`/reminders/${item.id}/actions`, { version: item.version, action, seconds });
+export const reminderPresented = (item: Reminder) => request.post(`/reminders/${item.id}/presented`, { dueAt: item.dueAt });
 export const changeReminder = (item: Reminder, title: string, triggerAt: number) => request.post(`/reminders/${item.id}/actions`, { version: item.version, action: 'edit', title, triggerAt });
 export const planAction = (item: ReminderPlan, action: string, values?: { title: string; triggerAt: number; recurrence: string }) => request.post(`/reminders/plans/${item.id}/actions`, { version: item.version, action, ...values });

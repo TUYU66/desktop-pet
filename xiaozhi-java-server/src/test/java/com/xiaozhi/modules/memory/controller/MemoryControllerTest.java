@@ -44,11 +44,13 @@ class MemoryControllerTest {
         assertEquals(409,controller.update(user,11L,Map.of("version",1,"content","用户21岁")).getCode());
         verifyNoInteractions(semantic);
     }
-    @Test void malformedOldDataIsRejectedWithoutPreview() {
+    @Test void malformedOldDataIsIsolatedForExplicitReview() {
         UserMemoryEntity row=new UserMemoryEntity();
         when(dao.selectList(any())).thenReturn(List.of(row));
         when(semantic.decode(row)).thenThrow(new MemoryFactStore.Conflict("记忆格式不符合当前协议"));
-        assertEquals(409,controller.list(user,"default").getCode());
+        var result=controller.list(user,"default");
+        assertEquals(0,result.getCode());
+        assertTrue(result.getData().get(0).isRequiresMigration());
     }
     @Test void cannotDeleteAnotherUsersMemory() {
         assertEquals(404,controller.delete(user,99L).getCode());

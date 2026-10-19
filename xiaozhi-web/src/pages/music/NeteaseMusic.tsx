@@ -1,3 +1,4 @@
+import { startPolling } from '../../utils/polling';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Alert, App, Avatar, Button, Empty, Form, Input, Modal, Popconfirm, Space, Spin, Tabs, Tag } from 'antd';
@@ -50,7 +51,7 @@ export default function NeteaseMusic({ deviceId, state, busy, play, librarySourc
   const songsRevision = useRef(0);
   const searchRevision = useRef(0);
   const listRevision = useRef(0);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const qrPolling = useRef<ReturnType<typeof startPolling> | null>(null);
   const clearMusic = useCallback(() => {
     listRevision.current++; songsRevision.current++; searchRevision.current++;
     clearTimeout(scanTimer.current); setView('library'); setPlaylistQuery('');
@@ -100,31 +101,30 @@ export default function NeteaseMusic({ deviceId, state, busy, play, librarySourc
   useEffect(() => {
     mounted.current = true; void reloadAccount();
     return () => { mounted.current = false; qrRevision.current++; accountRevision.current++;
-      listRevision.current++; songsRevision.current++; searchRevision.current++; clearTimeout(timer.current); clearTimeout(scanTimer.current); };
+      listRevision.current++; songsRevision.current++; searchRevision.current++; qrPolling.current?.stop(); clearTimeout(scanTimer.current); };
   }, [reloadAccount]);
-  const closeQr = () => { qrRevision.current++; clearTimeout(timer.current); setQrOpen(false); setQrLoading(false); };
+  const closeQr = () => { qrRevision.current++; qrPolling.current?.stop(); setQrOpen(false); setQrLoading(false); };
   const startQr = async () => {
     const revision = ++qrRevision.current;
-    clearTimeout(timer.current); setQrOpen(true); setQr(undefined); setQrLoading(true); setQrError(''); setQrState('waiting');
+    qrPolling.current?.stop(); setQrOpen(true); setQr(undefined); setQrLoading(true); setQrError(''); setQrState('waiting');
     try {
       const data = await neteaseApi.qr();
       if (!mounted.current || revision !== qrRevision.current) return;
       setQr(data);
-      const poll = async () => {
+      const poll = async (signal: AbortSignal) => {
         if (!mounted.current || revision !== qrRevision.current) return;
         try {
-          const result = await neteaseApi.check(data.token);
-          if (!mounted.current || revision !== qrRevision.current) return;
+          const result = await neteaseApi.check(data.token, signal);
+          if (!mounted.current || revision !== qrRevision.current || signal.aborted) return;
           setQrState(result.state); setQrError('');
           if (result.state === 'authorized') {
             accountRevision.current++; setAccount(result.account); setAccountLoading(false);
-            clearMusic(); setQrOpen(false); onAccountChanged(); void loadLists(); message.success('网易云账号已连接'); return;
+            qrPolling.current?.stop();clearMusic(); setQrOpen(false); onAccountChanged(); void loadLists(); message.success('网易云账号已连接'); return;
           }
-          if (result.state === 'expired') return;
-        } catch (e) { if (!mounted.current || revision !== qrRevision.current) return; setQrError(errorText(e)); }
-        timer.current = setTimeout(() => void poll(), 3000);
+          if (result.state === 'expired') { qrPolling.current?.stop();return; }
+        } catch (e) { if (!mounted.current || revision !== qrRevision.current || signal.aborted) return; setQrError(errorText(e));return false; }
       };
-      timer.current = setTimeout(() => void poll(), 2000);
+      qrPolling.current = startPolling(poll, { interval: 3000, maxInterval: 15000, leading: false });
     } catch (e) { if (mounted.current && revision === qrRevision.current) setQrError(errorText(e)); }
     finally { if (mounted.current && revision === qrRevision.current) setQrLoading(false); }
   };

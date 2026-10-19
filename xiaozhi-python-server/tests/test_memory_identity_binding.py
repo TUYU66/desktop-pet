@@ -2,7 +2,7 @@
 import unittest
 import test_memory_management as fixtures
 from test_memory import fact, memory, extract, review
-from core.providers.memory.mem_local_short.management import RESOLVE_PROMPT, QUANTITY_BIND_PROMPT, REPAIR_PROMPT
+from legacy_memory.management import RESOLVE_PROMPT, QUANTITY_BIND_PROMPT, REPAIR_PROMPT
 
 
 class IdentityBindingTests(unittest.IsolatedAsyncioTestCase):
@@ -21,7 +21,7 @@ class IdentityBindingTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_code_collision_does_not_merge_different_attributes(self):
         old=memory(fact())
-        from core.providers.memory.mem_local_short.management import Registry
+        from legacy_memory.management import Registry
         registry=Registry([old]); age_code=next(iter(registry.predicates.values()))["code"]
         text="我是大学生"; student=fact("职业","大学生",evidence=text)
         result,_,_,_=await self.run_turn(text,[extract(student),review()],

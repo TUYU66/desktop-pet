@@ -31,10 +31,13 @@ export default function PlayerControls({ source, state, deviceId, busy, canCance
   useEffect(() => { seekTarget.current = undefined; setSeekDraft(null); }, [state?.trackId, deviceId, source]);
   useEffect(() => { setCoverFailed(false); }, [state?.cover, state?.trackId, deviceId, source]);
   const cover = !coverFailed && albumCover(state?.cover);
-  return <div className="music-player-details"><section className="music-player" aria-label={source === 'local' ? '本地歌曲播放控制' : '网易云播放控制'}>
+  return <div className={`music-player-details${state?.state === 'playing' ? ' is-playing' : ''}`}><section className="music-player" aria-label={source === 'local' ? '本地歌曲播放控制' : '网易云播放控制'}>
+    <div className="music-artwork" key={`${source}:${state?.trackId || 'empty'}`}>
     {cover ? <img className="music-album-cover" src={cover} alt={`${state?.album || state?.title || '歌曲'}专辑封面`} referrerPolicy="no-referrer" onError={() => setCoverFailed(true)} /> :
       <div className={`music-disc ${playing ? 'is-playing' : ''}`} aria-hidden="true"><CustomerServiceOutlined /></div>}
-    <div className="music-current"><span>{deviceId ? labels[state?.state || 'stopped'] : '设备未连接'}{state?.trackId ? ` · ${source === 'local' ? '本地歌曲' : '网易云'}` : ''}</span>
+    <span className="music-artwork-note note-first" aria-hidden="true">♪</span><span className="music-artwork-note note-second" aria-hidden="true">♫</span>
+    </div>
+    <div className="music-current"><span className="music-playback-label">{state?.state === 'playing' && <span className="music-equalizer" aria-hidden="true"><i /><i /><i /><i /></span>}{deviceId ? labels[state?.state || 'stopped'] : '设备未连接'}{state?.trackId ? ` · ${source === 'local' ? '本地歌曲' : '网易云'}` : ''}</span>
       <h2>{state?.title || state?.name || '选一首喜欢的歌'}</h2>
       <p>{state?.name ? `${state.artist || '未知演唱者'}${state.album ? ' · '+state.album : ''}` : '选择下方歌曲，在桌面宠物上播放'}</p>
       {state?.trackId && <div className="music-timeline">

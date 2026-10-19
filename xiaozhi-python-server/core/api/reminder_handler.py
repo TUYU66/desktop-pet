@@ -1,14 +1,12 @@
 """保存好的提醒直接TTS，不经过聊天模型、不伪造用户消息或长期记忆。"""
 import asyncio
-import hmac
-import ipaddress
-import os
 import time
 import uuid
 from aiohttp import web
 from core.handle.sendAudioHandle import sendAudioMessage, send_tts_message, _wait_for_audio_completion
 from core.conversation.standby import begin_interaction, enter_standby
 from core.providers.tts.dto.dto import SentenceType
+from core.utils.service_auth import service_authorized
 
 
 class ReminderHandler:
@@ -33,13 +31,7 @@ class ReminderHandler:
 
     @staticmethod
     def authorized(request):
-        configured=os.environ.get("XIAOZHI_REMINDER_SERVICE_KEY","")
-        if not configured:
-            try:
-                address=ipaddress.ip_address(request.remote or "")
-                if not (address.is_loopback or getattr(address,"ipv4_mapped",None) and address.ipv4_mapped.is_loopback): return False
-            except ValueError: return False
-        return hmac.compare_digest(request.headers.get("Service-Key",""),configured or "xiaozhi-reminders")
+        return service_authorized(request, 'XIAOZHI_REMINDER_SERVICE_KEY')
 
     async def handle_announce(self,request):
         if not self.authorized(request):
@@ -136,7 +128,9 @@ class ReminderHandler:
             if not item['reminderId']: return True
             from core.reminders import client as reminder_client
             snapshot=await asyncio.wait_for(reminder_client.state(device),3)
-            return any(r['id']==item['reminderId'] and r.get('attemptId')==item['attemptId'] and r['status']=='dispatching' for r in snapshot['items'])
+            return any(r['id']==item['reminderId'] and r.get('attemptId')==item['attemptId']
+                       and (r['status']=='dispatching' or r['status']=='awaiting_confirmation'
+                            and r.get('ackDeadline',0)>snapshot['serverNow']) for r in snapshot['items'])
         def current():
             return unchanged() and not conn.client_abort and conn.sentence_id==stream
         async def prepare_item(item,index):
@@ -154,6 +148,13 @@ class ReminderHandler:
             announcement,audio=await prepared[index]
             if not audio: return 'retry'
             if not current() or not await active(item): return 'retry'
+            if item['reminderId']:
+                from core.reminders import client as reminder_client
+                started=await asyncio.wait_for(reminder_client.command(device,dict(
+                    action='started',id=item['reminderId'],attemptId=item['attemptId'])),3)
+                if (not isinstance(started,dict) or started.get('status')!='awaiting_confirmation'
+                        or started.get('attemptId')!=item['attemptId'] or not await active(item)):
+                    return 'retry'
             # Synthesize just one next item while the current audio is playing.
             # Its state is checked again before transmission; prefetch never sends audio.
             if index+1<len(items) and index+1 not in prepared:

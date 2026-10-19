@@ -19,7 +19,7 @@ class ReminderCatchupTest {
         verify(jdbc).query(argThat(sql->sql.contains("user_id=? AND device_id=?")
                 &&sql.contains("history_deleted=false")&&sql.contains("'expired','missed'")
                 &&!sql.contains("followup_stage<>")&&sql.contains("followup_stage>=?")&&sql.endsWith("LIMIT 3")),
-            any(RowMapper.class),eq(7L),eq("device"),eq(now),eq(now-ReminderStore.FINISHED_RETENTION_MS),eq(-now));
+            any(RowMapper.class),eq(7L),eq("device"),eq(now),eq(0L),eq(-now));
     }
 
     @Test void playbackLeaseAndCommitAreAtomicAndDoNotModifyReminderSchedule() {
@@ -29,11 +29,11 @@ class ReminderCatchupTest {
         String token=UUID.randomUUID().toString();
         assertTrue(store.claimFollowup(7,"device","id",token,stage,now));
         assertFalse(store.claimFollowup(7,"device","id",UUID.randomUUID().toString(),stage,now));
-        verify(jdbc).update(argThat(sql->sql.contains("AND followup_stage>=?")&&!sql.contains("followup_stage<>?")),eq(-(now+90_000)),eq(token),eq("id"),eq(7L),eq("device"),eq(now),eq(now-ReminderStore.FINISHED_RETENTION_MS),eq(stage),eq(-now));
+        verify(jdbc).update(argThat(sql->sql.contains("AND followup_stage>=?")&&!sql.contains("followup_stage<>?")),eq(-(now+90_000)),eq(token),eq("id"),eq(7L),eq("device"),eq(now),eq(0L),eq(stage),eq(-now));
         assertTrue(store.finishFollowup(7,"device","id",token,stage,now));
         verify(jdbc).update(argThat(sql->sql.startsWith("UPDATE user_reminder SET followup_stage=?,followup_token=NULL,version=version+1 WHERE")
                 &&sql.contains("followup_token=?")&&sql.contains("followup_stage<?")),
-            eq(stage),eq("id"),eq(7L),eq("device"),eq(token),eq(now),eq(now-ReminderStore.FINISHED_RETENTION_MS),eq(stage),eq(-now));
+            eq(stage),eq("id"),eq(7L),eq("device"),eq(token),eq(now),eq(0L),eq(stage),eq(-now));
         store.releaseFollowup(7,"device","id",token);
         verify(jdbc).update(contains("followup_token=? AND followup_stage<0"),eq("id"),eq(7L),eq("device"),eq(token));
     }

@@ -1,4 +1,5 @@
 """Chat-only snapshot/history cache. Decision and Commit always use the real store."""
+
 import asyncio
 import copy
 import time
@@ -26,25 +27,36 @@ class RecallCache:
     async def snapshot(self, store, role, fresh=False):
         async with self.lock:
             generation = self.generation
-            if self.snapshot_value is not None and not fresh and time.monotonic() - self.checked < self.ttl:
+            if (
+                self.snapshot_value is not None
+                and not fresh
+                and time.monotonic() - self.checked < self.ttl
+            ):
                 return copy.deepcopy(self.snapshot_value)
-            revision = await store.revision(role) if callable(getattr(store, 'revision', None)) else None
-            if self.snapshot_value is None or revision is None or revision != self.snapshot_value['revision']:
+            revision = (
+                await store.revision(role) if callable(getattr(store, "revision", None)) else None
+            )
+            if (
+                self.snapshot_value is None
+                or revision is None
+                or revision != self.snapshot_value["revision"]
+            ):
                 snapshot = await store.snapshot(role)
                 read_snapshot(snapshot)  # fail closed; never cache an unavailable/invalid snapshot
                 if generation != self.generation:
-                    raise StoreUnavailable('cache_changed_during_read')
+                    raise StoreUnavailable("cache_changed_during_read")
                 self.snapshot_value = copy.deepcopy(snapshot)
                 self.histories.clear()
             if generation != self.generation:
-                raise StoreUnavailable('cache_changed_during_read')
+                raise StoreUnavailable("cache_changed_during_read")
             self.checked = time.monotonic()
             return copy.deepcopy(self.snapshot_value)
 
     def view(self, store, snapshot):
         cache = self
-        revision = snapshot['revision']
+        revision = snapshot["revision"]
         generation = self.generation
+
         class View:
             async def snapshot(self, role):
                 return copy.deepcopy(snapshot)
@@ -59,6 +71,7 @@ class RecallCache:
                     while len(cache.histories) > 256:
                         cache.histories.popitem(last=False)
                 return history
+
         return View()
 
 

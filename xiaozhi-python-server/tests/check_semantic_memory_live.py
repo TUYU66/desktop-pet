@@ -17,8 +17,8 @@ from unittest.mock import patch
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from config.config_loader import load_config
 from core.utils.llm import create_instance
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short import semantic
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory import semantic
 from semantic_memory_fixture import MemoryFixture
 
 

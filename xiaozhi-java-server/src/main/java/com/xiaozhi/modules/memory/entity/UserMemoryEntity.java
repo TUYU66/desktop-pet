@@ -23,6 +23,7 @@ public class UserMemoryEntity {
     @TableField(updateStrategy = FieldStrategy.ALWAYS) private String contentHash;
     private String sourceTurnId;
     private Integer version;
+    @TableField(exist = false) private boolean requiresMigration;
     private LocalDateTime createDate;
     private LocalDateTime updateDate;
 }

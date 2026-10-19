@@ -1,0 +1,78 @@
+/* Motion extends the existing paper-and-pencil workspace. No scroll takeover.
+   GSAP owns group entrances; CSS owns small decorative and interaction states. */
+@media (min-width: 761px) {
+  .notion-theme .page-motion { animation: none; }
+  .motion-enhanced .companion-welcome,
+  .motion-enhanced .memory-group,
+  .motion-enhanced .netease-playlist,
+  .motion-enhanced .qq-chat .message-row,
+  .motion-enhanced details[open] > :not(summary) { animation: none; }
+  .notion-theme .companion-welcome:hover .companion-face { transform: rotate(-5deg); }
+  .notion-theme .companion-face { transition: none; }
+
+  .motion-enhanced .page-heading h1, .motion-enhanced .music-heading h1 { position: relative; width: fit-content; }
+  .motion-enhanced .page-heading h1::before, .motion-enhanced .music-heading h1::before {
+    content: ''; position: absolute; left: 0; bottom: -7px; width: 34px; height: 3px;
+    border-radius: 50%; background: #b4a8df; transform-origin: left;
+    animation: pencil-underline .65s .16s cubic-bezier(.2,.8,.2,1) both;
+  }
+  .motion-enhanced .page-doodle:hover .doodle-body { animation: doodle-greet .55s ease; }
+  .motion-enhanced .memory-group-heading { position: relative; overflow: hidden; }
+  .motion-enhanced .memory-group-heading::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+    background: linear-gradient(110deg, transparent 25%, #c8bce41f 47%, transparent 70%);
+    transform: translateX(-110%);
+  }
+  .motion-enhanced .memory-group:hover .memory-group-heading::after { animation: paper-sheen .8s ease both; }
+  .motion-enhanced .memory-group-heading .memory-category-count { transition: transform .25s ease; }
+  .motion-enhanced .memory-group:hover .memory-category-count { transform: rotate(-6deg); }
+  .motion-enhanced .reminder-pending { position: relative; }
+  .motion-enhanced .reminder-pending::before {
+    content: ''; position: absolute; left: -1px; top: 24px; height: 32px; width: 3px;
+    background: #b48c41; border-radius: 2px;
+    animation: reminder-bookmark .7s ease both;
+  }
+  .motion-enhanced .active-reminder.needs-response .active-reminder-time strong { position: relative; }
+  .motion-enhanced .active-reminder.needs-response .active-reminder-time strong::after {
+    content: ''; display: inline-block; margin-left: 7px; width: 6px; height: 6px; border-radius: 50%; background: #b48c41;
+    animation: reminder-breathe 2.8s ease-in-out infinite;
+  }
+  .motion-enhanced .chat-feedback:has(.ant-alert) { animation: feedback-open .3s ease-out both; }
+  .motion-enhanced .composer:focus-within { box-shadow: inset 3px 0 0 #b4a8df; background: #fcfbff; }
+  .motion-enhanced .composer-toolbar .ant-btn-primary:not(:disabled):hover .anticon { transform: translate(2px, -2px); }
+  .motion-enhanced .composer-toolbar .ant-btn-primary .anticon { transition: transform .2s ease; }
+  .motion-enhanced .settings-preview .preview-value { padding: 2px 0; border-radius: 3px; }
+  .motion-enhanced .settings-card:focus-within .ant-card-head-title::after {
+    content: ''; display: inline-block; margin-left: 9px; width: 5px; height: 5px; border-radius: 50%; background: #9280bc;
+    animation: feedback-open .3s ease-out both;
+  }
+  .motion-enhanced .netease-playlist { transition: background-color .22s ease, box-shadow .22s ease; }
+  .motion-enhanced .netease-playlist:hover { box-shadow: 3px 3px 0 #e6e0f5; }
+  .music-artwork { position: relative; flex-shrink: 0; }
+  .music-artwork > img { display: block; }
+  .music-artwork-note { position: absolute; opacity: 0; pointer-events: none; color: #9788b6; font-size: 24px; }
+  .note-first { right: -17px; top: 12px; }
+  .note-second { left: -16px; bottom: 14px; }
+  .is-playing .music-artwork-note { animation: music-note-rise 3.2s ease-in-out infinite; }
+  .is-playing .note-second { animation-delay: -1.6s; }
+  .motion-enhanced .music-artwork { animation: artwork-arrive .5s ease-out both; }
+  .motion-enhanced .is-playing .music-album-cover { box-shadow: 4px 5px 0 #e6e0f5; }
+  .motion-enhanced .music-lyric-line.active { box-shadow: inset 2px 0 #c2b4e1; }
+  .motion-enhanced .music-lyric-line { transition: color .22s ease, background-color .22s ease, box-shadow .22s ease; }
+}
+/* The artwork wrapper is structural on every viewport; effects stay desktop-only. */
+.music-artwork { flex-shrink: 0; }
+.music-artwork-note { pointer-events: none; }
+@media (max-width: 760px) { .music-artwork-note { display: none; } }
+@keyframes pencil-underline { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes doodle-greet { 30% { transform: rotate(-9deg); } 70% { transform: rotate(5deg); } }
+@keyframes paper-sheen { to { transform: translateX(110%); } }
+@keyframes reminder-bookmark { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+@keyframes reminder-breathe { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+@keyframes feedback-open { from { opacity: .3; } to { opacity: 1; } }
+@keyframes artwork-arrive { from { opacity: .3; transform: rotate(-3deg) scale(.95); } to { opacity: 1; transform: none; } }
+@keyframes music-note-rise { 0% { opacity: 0; transform: translateY(7px) rotate(-8deg); } 35% { opacity: .75; } 100% { opacity: 0; transform: translateY(-21px) rotate(10deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .notion-theme *, .notion-theme *::before, .notion-theme *::after { animation: none !important; transition: none !important; }
+  .music-artwork-note { display: none; }
+}

@@ -1,3 +1,4 @@
+import { startPolling } from '../../utils/polling';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, InputNumber, Progress, Space, Tag } from 'antd';
 import request from '../../api/request';
@@ -63,6 +64,7 @@ export default function BalanceTuning({ device, online }: { device: string; onli
   const [clock, setClock] = useState(Date.now());
   const cursor = useRef({ after: 0, epoch: 0 });
   const inFlight = useRef(false);
+  const readController = useRef<AbortController | null>(null);
   const copyRequested = useRef(false);
   const mutating = useRef(false);
   const alive = useRef(true);
@@ -97,14 +99,19 @@ export default function BalanceTuning({ device, online }: { device: string; onli
     profileKeys.slice(0, Math.max(0, profileKeys.length - 64)).forEach(key => { delete profiles.current[key]; delete gyroProfiles.current[key]; });
   }, []);
 
-  const read = useCallback(async (copy = false) => {
-    if (mutating.current || !online) return;
+  const read = useCallback(async (copy = false, signal?: AbortSignal) => {
+    if (mutating.current || !online || document.hidden || signal?.aborted) return;
     if (copy) { copyRequested.current = true; setReading(true); }
     if (inFlight.current) return;
     inFlight.current = true;
+    const controller = new AbortController();
+    readController.current = controller;
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    const current = () => alive.current && readController.current === controller && !controller.signal.aborted;
     try {
-      const res = await request.get('/devices/tuning', { params: { deviceId: device, ...cursor.current }, timeout: 5000 });
-      if (!alive.current) return;
+      const res = await request.get('/devices/tuning', { params: { deviceId: device, ...cursor.current }, timeout: 5000, signal: controller.signal });
+      if (!current()) return;
       if (!stateValid(res.data)) throw new Error('调参状态格式不完整，请刷新');
       adopt(res.data);
       if (copyRequested.current && res.data.valid && res.data.params) {
@@ -112,25 +119,29 @@ export default function BalanceTuning({ device, online }: { device: string; onli
         setUncertain(false); setFeedback('已读取设备实际参数');
       }
     } catch (e) {
-      if (alive.current) setError(e instanceof Error ? e.message : '状态读取失败');
+      if (current()) setError(e instanceof Error ? e.message : '状态读取失败');
+      return false;
     } finally {
-      inFlight.current = false; copyRequested.current = false;
-      if (alive.current) setReading(false);
+      signal?.removeEventListener('abort', abort);
+      if (readController.current === controller) {
+        readController.current = null; inFlight.current = false; copyRequested.current = false;
+        if (alive.current) setReading(false);
+      }
     }
   }, [adopt, device, online]);
 
   useEffect(() => {
     if (!open) return;
-    let cancelled = false;
-    let timer: number | undefined;
-    const poll = async () => {
-      if (cancelled) return;
-      if (!document.hidden) await read();
-      if (!cancelled) timer = window.setTimeout(() => void poll(), observing || latest.current?.gyro?.status === 1 ? 1000 : 5000);
+    const polling = startPolling(signal => read(false, signal), {
+      interval: () => observing || latest.current?.gyro?.status === 1 ? 1000 : 5000,
+      maxInterval: 30000,
+    });
+    const clockTimer = window.setInterval(() => { if (!document.hidden) setClock(Date.now()); }, 500);
+    return () => {
+      polling.stop(); readController.current?.abort(); readController.current = null;
+      inFlight.current = false; copyRequested.current = false;
+      window.clearInterval(clockTimer);
     };
-    void poll();
-    const clockTimer = window.setInterval(() => setClock(Date.now()), 500);
-    return () => { cancelled = true; window.clearTimeout(timer); window.clearInterval(clockTimer); };
   }, [open, observing, read]);
 
   const control = async (operation: Operation) => {

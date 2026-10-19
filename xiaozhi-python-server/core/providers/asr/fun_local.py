@@ -1,7 +1,5 @@
 import os
-import io
 import re
-import sys
 import time
 import shutil
 import psutil
@@ -52,33 +50,16 @@ def lang_tag_filter(text: str) -> dict | str:
     return result
 
 
-# 捕获标准输出
-class CaptureOutput:
-    def __enter__(self):
-        self._output = io.StringIO()
-        self._original_stdout = sys.stdout
-        sys.stdout = self._output
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        sys.stdout = self._original_stdout
-        self.output = self._output.getvalue()
-        self._output.close()
-
-        # 将捕获到的内容通过 logger 输出
-        if self.output:
-            logger.bind(tag=TAG).info(self.output.strip())
-
-
 class ASRProvider(ASRProviderBase):
     def __init__(self, config: dict, delete_audio_file: bool):
         super().__init__()
-        
+
         # 内存检测，要求大于2G
         min_mem_bytes = 2 * 1024 * 1024 * 1024
         total_mem = psutil.virtual_memory().total
         if total_mem < min_mem_bytes:
             logger.bind(tag=TAG).error(f"可用内存不足2G，当前仅有 {total_mem / (1024*1024):.2f} MB，可能无法启动FunASR")
-        
+
         self.interface_type = InterfaceType.LOCAL
         self._inference_lock = threading.Lock()
         self.language = config.get("language", "zh")
@@ -88,21 +69,21 @@ class ASRProvider(ASRProviderBase):
 
         # 确保输出目录存在
         os.makedirs(self.output_dir, exist_ok=True)
-        with CaptureOutput():
-            self.model = AutoModel(
+        # Do not redirect process-global stdout: other sessions log concurrently.
+        self.model = AutoModel(
                 model=self.model_dir,
                 vad_kwargs={"max_single_segment_time": 30000},
                 disable_update=True,
                 hub="hf",
                 # device="cuda:0",  # 启用GPU加速
-            )
+        )
 
     async def speech_to_text(
         self, opus_data: List[bytes], session_id: str, audio_format="opus", artifacts=None
     ) -> Tuple[Optional[str], Optional[str]]:
         """语音转文本主处理逻辑"""
         retry_count = 0
-        
+
         while retry_count < MAX_RETRIES:
             try:
                 if artifacts is None:
@@ -110,17 +91,24 @@ class ASRProvider(ASRProviderBase):
 
                 # 语音识别 - 使用线程池避免阻塞事件循环
                 start_time = time.time()
+                cancelled = threading.Event()
                 def infer():
                     # Cancelled asyncio work cannot terminate model.generate.
                     # Do not pile up additional inference threads behind it.
-                    if not self._inference_lock.acquire(blocking=False):
-                        raise RuntimeError("上一段语音识别尚未结束")
+                    if not self._inference_lock.acquire(timeout=25):
+                        raise RuntimeError("语音识别排队超时")
                     try:
+                        if cancelled.is_set():
+                            return []
                         return self.model.generate(input=artifacts.pcm_bytes, cache={},
                             language=self.language, use_itn=True, batch_size_s=60)
                     finally:
                         self._inference_lock.release()
-                result = await asyncio.to_thread(infer)
+                try:
+                    result = await asyncio.to_thread(infer)
+                except asyncio.CancelledError:
+                    cancelled.set()
+                    raise
                 if not result:
                     return "", artifacts.file_path
                 # Some model pipelines return multiple segments. Keep every

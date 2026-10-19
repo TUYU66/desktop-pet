@@ -74,6 +74,9 @@ async def enter_standby(conn, force=False):
 def begin_interaction(conn, *, awake=False):
     if awake:
         cancel_standby_reply(conn)
+        if not conversation_awake(conn):
+            conn.reminder_noticed_stages = set()
+            conn.reminder_notice_times = {}
         conn.conversation_awake = True
         conn.return_to_standby = False
         conn.explicit_standby = False

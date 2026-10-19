@@ -5,7 +5,7 @@ import unittest
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
-from core.providers.memory.mem_local_short import semantic as s
+from legacy_memory import semantic as s
 from semantic_memory_fixture import MemoryFixture
 
 WHEN = datetime.fromisoformat("2026-09-16T10:30:00+08:00")
@@ -290,7 +290,7 @@ class SemanticTests(unittest.IsolatedAsyncioTestCase):
         p._ask_json.assert_not_called()
 
     async def test_audit_logs_raw_and_parsed_without_error_mapping(self):
-        from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
+        from legacy_memory.mem_local_short import MemoryProvider
         p=MemoryProvider({"structured_output":"text"})
         raw='```json\n{"errors":["数量不符"]}\n```'
         p.llm=SimpleNamespace(response_no_stream=Mock(return_value=raw))
@@ -304,7 +304,7 @@ class SemanticTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("audit_input",logs)
 
     async def test_invalid_audit_json_still_has_raw_log(self):
-        from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
+        from legacy_memory.mem_local_short import MemoryProvider
         p=MemoryProvider({"structured_output":"text"})
         p.llm=SimpleNamespace(response_no_stream=Mock(return_value='{"errors":'))
         p._diagnose=Mock()

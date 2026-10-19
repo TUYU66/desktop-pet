@@ -34,7 +34,7 @@ AfeWakeWord::~AfeWakeWord() {
         heap_caps_free(wake_word_encode_task_buffer_);
     }
 
-    if (models_ != nullptr) {
+    if (models_ != nullptr && owns_models_) {
         esp_srmodel_deinit(models_);
     }
 
@@ -42,24 +42,30 @@ AfeWakeWord::~AfeWakeWord() {
 }
 
 bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
+    if (afe_data_ != nullptr) return true;
+    if (codec == nullptr || event_group_ == nullptr) {
+        ESP_LOGE(TAG, "Wake word initialization resources unavailable");
+        return false;
+    }
     codec_ = codec;
     int ref_num = codec_->input_reference() ? 1 : 0;
 
-    if (models_list == nullptr) {
-        models_ = esp_srmodel_init("model");
-    } else {
-        models_ = models_list;
+    if (models_ == nullptr) {
+        owns_models_ = models_list == nullptr;
+        models_ = owns_models_ ? esp_srmodel_init("model") : models_list;
     }
 
     if (models_ == nullptr || models_->num == -1) {
         ESP_LOGE(TAG, "Failed to initialize wakenet model");
         return false;
     }
+    wake_words_.clear();
     for (int i = 0; i < models_->num; i++) {
         ESP_LOGI(TAG, "Model %d: %s", i, models_->model_name[i]);
         if (strstr(models_->model_name[i], ESP_WN_PREFIX) != NULL) {
             wakenet_model_ = models_->model_name[i];
             auto words = esp_srmodel_get_wake_words(models_, wakenet_model_);
+            if (words == nullptr) continue;
             // split by ";" to get all wake words
             std::stringstream ss(words);
             std::string word;
@@ -77,6 +83,10 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
         input_format.push_back('R');
     }
     afe_config_t* afe_config = afe_config_init(input_format.c_str(), models_, AFE_TYPE_SR, AFE_MODE_HIGH_PERF);
+    if (afe_config == nullptr) {
+        ESP_LOGE(TAG, "Failed to allocate wake word AFE configuration");
+        return false;
+    }
     afe_config->aec_init = codec_->input_reference();
     afe_config->aec_mode = AEC_MODE_SR_HIGH_PERF;
     afe_config->vad_init = true;
@@ -85,18 +95,29 @@ bool AfeWakeWord::Initialize(AudioCodec* codec, srmodel_list_t* models_list) {
     afe_config->memory_alloc_mode = AFE_MEMORY_ALLOC_MORE_PSRAM;
     
     afe_iface_ = esp_afe_handle_from_config(afe_config);
-    afe_data_ = afe_iface_->create_from_config(afe_config);
+    afe_data_ = afe_iface_ ? afe_iface_->create_from_config(afe_config) : nullptr;
+    afe_config_free(afe_config);
+    if (afe_data_ == nullptr) {
+        ESP_LOGE(TAG, "Failed to create wake word AFE instance");
+        return false;
+    }
 
 #ifdef CONFIG_USE_DYNAMIC_WAKE_WORD
     constexpr uint32_t detection_stack_size = 8192;
 #else
     constexpr uint32_t detection_stack_size = 4096;
 #endif
-    xTaskCreate([](void* arg) {
+    const auto created = xTaskCreate([](void* arg) {
         auto this_ = (AfeWakeWord*)arg;
         this_->AudioDetectionTask();
         vTaskDelete(NULL);
     }, "audio_detection", detection_stack_size, this, 3, nullptr);
+    if (created != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create audio detection task");
+        afe_iface_->destroy(afe_data_);
+        afe_data_ = nullptr;
+        return false;
+    }
 
     return true;
 }

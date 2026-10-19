@@ -1,7 +1,23 @@
 .memory-filters { display: grid; grid-template-columns: minmax(180px, 1fr) 150px 150px; gap: 12px; margin: 20px 0 8px; }
-.memory-loading { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #64748b; font-size: 13px; }
-.memory-row-category { display: inline-block; margin-bottom: 6px; padding: 2px 8px; border-radius: 6px; background: #eef4fd; color: #4d6590; font-size: 12px; }
+.memory-loading { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: #787878; font-size: 13px; }
+.memory-row-category { display: inline-block; margin-bottom: 6px; padding: 2px 8px; border-radius: 6px; background: #f5f5f5; color: #6e6e6e; font-size: 12px; }
 .memory-page > .ant-alert { margin-bottom: 16px; }
+/* Category names remain visible: colour is an additional cue, not the only one. */
+.notion-theme :is(.memory-group-profile, .memory-row-category[data-category="profile"]) { --memory-category: #3667a0; }
+.notion-theme :is(.memory-group-preference, .memory-row-category[data-category="preference"]) { --memory-category: #9a4874; }
+.notion-theme :is(.memory-group-relationship, .memory-row-category[data-category="relationship"]) { --memory-category: #6b53a1; }
+.notion-theme :is(.memory-group-event, .memory-row-category[data-category="event"]) { --memory-category: #ac642b; }
+.notion-theme :is(.memory-group-goal, .memory-row-category[data-category="goal"]) { --memory-category: #387b66; }
+.notion-theme :is(.memory-group-habit, .memory-row-category[data-category="habit"]) { --memory-category: #7a7830; }
+.notion-theme :is(.memory-group-note, .memory-row-category[data-category="note"]) { --memory-category: #66717f; }
+.notion-theme .memory-group-recent { --memory-category: #6e648c; }
+.notion-theme .memory-page .memory-group-heading { background: color-mix(in srgb, var(--memory-category) 5%, white); }
+.notion-theme .memory-page .memory-group-heading h2 { color: color-mix(in srgb, var(--memory-category) 75%, #37352f); }
+.notion-theme .memory-row-category[data-category] {
+  color: var(--memory-category);
+  background: color-mix(in srgb, var(--memory-category) 8%, white);
+  border: 1px solid color-mix(in srgb, var(--memory-category) 20%, white);
+}
 @media (max-width: 650px) {
   .memory-filters { grid-template-columns: 1fr 1fr; }
   .memory-filters > .ant-input-search { grid-column: 1 / -1; }

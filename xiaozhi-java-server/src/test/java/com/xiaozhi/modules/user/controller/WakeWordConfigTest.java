@@ -32,6 +32,7 @@ class WakeWordConfigTest {
         var controller = new UserController();
         ReflectionTestUtils.setField(controller, "botConfigDao", dao);
         ReflectionTestUtils.setField(controller, "pythonBaseUrl", "http://localhost");
+        ReflectionTestUtils.setField(controller, "deviceServiceKey", "test-private-device");
         var web = WebClient.builder().exchangeFunction(request -> Mono.just(
                 ClientResponse.create(HttpStatus.OK).body("{}").build())).build();
         ReflectionTestUtils.setField(controller, "webClient", web);
@@ -40,8 +41,10 @@ class WakeWordConfigTest {
             assertEquals(0, controller.saveConfig(user, Map.of("customWakeWord", word)).getCode());
         }
         var values = org.mockito.ArgumentCaptor.forClass(BotConfigEntity.class);
-        verify(dao, times(2)).insert(values.capture());
-        assertEquals(List.of("你好朋友", ""), values.getAllValues().stream().map(BotConfigEntity::getConfigValue).toList());
-        assertTrue(values.getAllValues().stream().allMatch(v -> v.getConfigKey().equals("customWakeWord")));
+        verify(dao, times(4)).insert(values.capture());
+        assertEquals(List.of("你好朋友", ""), values.getAllValues().stream()
+            .filter(v->v.getConfigKey().equals("customWakeWord")).map(BotConfigEntity::getConfigValue).toList());
+        assertTrue(values.getAllValues().stream().filter(v->v.getConfigKey().equals("customWakePinyin"))
+            .allMatch(v->v.getConfigValue().isEmpty()));
     }
 }

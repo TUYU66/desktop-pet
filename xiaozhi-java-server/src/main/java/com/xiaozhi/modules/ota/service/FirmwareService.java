@@ -15,9 +15,11 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 public class FirmwareService extends ServiceImpl<FirmwareDao, FirmwareEntity> {
+    private java.time.Clock clock=java.time.Clock.systemUTC();
 
     /** 下载 UUID → 固件 ID 映射 */
-    private final Map<String, Long> downloadTokens = new ConcurrentHashMap<>();
+    private record DownloadGrant(Long firmwareId,long expiresAt) {}
+    private final Map<String, DownloadGrant> downloadTokens = new ConcurrentHashMap<>();
 
     public Page<FirmwareEntity> page(int page, int size) {
         return this.page(new Page<>(page, size),
@@ -34,17 +36,17 @@ public class FirmwareService extends ServiceImpl<FirmwareDao, FirmwareEntity> {
     }
 
     public String generateDownloadToken(Long firmwareId) {
+        long now=clock.millis();
+        downloadTokens.entrySet().removeIf(entry->entry.getValue().expiresAt()<=now);
+        if(downloadTokens.size()>=4096) throw new IllegalStateException("下载授权繁忙，请稍后重试");
         String uuid = UUID.fastUUID().toString(true);
-        downloadTokens.put(uuid, firmwareId);
+        downloadTokens.put(uuid, new DownloadGrant(firmwareId,now+300_000));
         return uuid;
     }
 
     public Long getFirmwareIdByToken(String uuid) {
-        Long id = downloadTokens.get(uuid);
-        if (id != null) {
-            downloadTokens.remove(uuid);
-        }
-        return id;
+        DownloadGrant grant = downloadTokens.remove(uuid);
+        return grant!=null&&grant.expiresAt()>clock.millis()?grant.firmwareId():null;
     }
 
     public void incrementDownloadCount(Long firmwareId) {

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.25.xsd">
+ <changeSet id="20261018-reminder-round-window" author="codex">
+  <addColumn tableName="user_reminder">
+   <column name="round_started_at" type="BIGINT" defaultValueNumeric="0"><constraints nullable="false"/></column>
+  </addColumn>
+  <sql><![CDATA[
+   UPDATE user_reminder SET round_started_at=GREATEST(0,ack_deadline-60000)
+    WHERE task_id IS NULL AND status='awaiting_confirmation' AND ack_deadline>0;
+   UPDATE user_reminder SET ack_deadline=round_started_at+30000
+    WHERE task_id IS NULL AND status='awaiting_confirmation' AND round_started_at>0;
+   UPDATE user_reminder SET attempt_id=NULL WHERE task_id IS NULL AND status='scheduled';
+  ]]></sql>
+ </changeSet>
+</databaseChangeLog>

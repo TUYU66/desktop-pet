@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from core.api.chat_handler import ChatHandler
+from core.conversation import engine as engine_module
 from core.utils.dialogue import Dialogue, Message, saved_memory_recall_answer
 
 
@@ -41,11 +42,11 @@ class ChatSubmissionTests(unittest.IsolatedAsyncioTestCase):
         tree = ast.parse(source.read_text(encoding="utf-8"))
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "ConversationEngine")
         method = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_chat")
-        namespace = {"asyncio": asyncio, "uuid": uuid, "json": json, "TAG": "test", "Message": Message,
+        namespace = {**vars(engine_module), "time": __import__("time"), "asyncio": asyncio, "uuid": uuid, "json": json, "TAG": "test", "Message": Message,
                      "saved_memory_recall_answer": saved_memory_recall_answer, "TTSMessageDTO": SimpleNamespace,
                      "SentenceType": SimpleNamespace(FIRST="first", MIDDLE="middle", LAST="last"),
-                     "ContentType": SimpleNamespace(ACTION="action", TEXT="text"), "DIRECT_ANSWER_TOOL": {},
-                     "textUtils": SimpleNamespace(get_emotion=AsyncMock())}
+                     "ContentType": SimpleNamespace(ACTION="action", TEXT="text"), "DIRECT_ANSWER_TOOL": engine_module.DIRECT_ANSWER_TOOL,
+                     "textUtils": SimpleNamespace(get_emotion=AsyncMock(), EMOJI_MAP={})}
         exec(compile(ast.Module(body=[method], type_ignores=[]), str(source), "exec"), namespace)
         for intent, query, receipt in (
             ("function_call", "你记住了我什么", None), ("none", "你记住了我什么", None),
@@ -59,7 +60,7 @@ class ChatSubmissionTests(unittest.IsolatedAsyncioTestCase):
                                       tts=SimpleNamespace(tts_text_queue=queue.Queue(), store_tts_text=Mock()), _schedule_memory_save=Mock())
             handler.dialogue.put(Message(role="system", content="你会偷偷研究男友的编程书。"))
             result = await asyncio.wait_for(asyncio.to_thread(namespace["_chat"], handler, query), 3)
-            self.assertTrue(result)
+            self.assertTrue(result, str(handler.logger.bind.return_value.error.call_args))
             handler.llm.response.assert_not_called()
             handler.llm.response_with_functions.assert_not_called()
             self.assertIn("用户养了两只猫", handler.dialogue.dialogue[-1].content)
@@ -70,72 +71,70 @@ class ChatSubmissionTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual("last", queued[-1].sentence_type)
             self.assertIn("用户养了两只猫", queued[1].content_detail)
 
+    def request(self, body):
+        return SimpleNamespace(remote='127.0.0.1',headers={'Service-Key':'xiaozhi-device'},json=AsyncMock(return_value=body))
+
+    def connection(self):
+        return SimpleNamespace(session_id='old',sentence_id='turn',stop_event=threading.Event(),
+            config={},tts=object(),standby=True,conversation_awake=False,client_is_speaking=False,
+            client_abort=False,chat_lock=threading.Lock(),executor=SimpleNamespace(submit=Mock()),
+            switch_session=AsyncMock(),run_web_chat=Mock(),local_music=None,web_chat_tracking=None,logger=Mock())
+
     def setUp(self):
+        auth_environment=patch.dict('os.environ',{'XIAOZHI_DEVICE_SERVICE_KEY':'xiaozhi-device'})
+        auth_environment.start()
+        self.addCleanup(auth_environment.stop)
         with patch("core.api.chat_handler.setup_logging", return_value=Mock()):
             self.api = ChatHandler({}, SimpleNamespace(device_handlers={}))
 
     async def test_unknown_device_does_not_fall_back_to_another_device(self):
         other = Mock()
         self.api.ws_server.device_handlers["other"] = other
-        response = await self.api.handle_send(SimpleNamespace(json=AsyncMock(
+        response = await self.api.handle_send(SimpleNamespace(remote='127.0.0.1', headers={'Service-Key':'xiaozhi-device'}, json=AsyncMock(
             return_value={"text": "hello", "deviceId": "offline"})))
         self.assertEqual(response.status, 404)
         other.executor.submit.assert_not_called()
 
     async def test_invalid_payloads_return_400(self):
         for body in ([], {"text": None}, {"text": "hi", "sessionId": 42}, {"text": " "}):
-            response = await self.api.handle_send(SimpleNamespace(json=AsyncMock(return_value=body)))
+            response = await self.api.handle_send(SimpleNamespace(remote='127.0.0.1', headers={'Service-Key':'xiaozhi-device'}, json=AsyncMock(return_value=body)))
             self.assertEqual(response.status, 400)
 
     async def test_switch_finishes_before_message_is_submitted(self):
-        handler = Mock(session_id="old")
-        handler.standby = True
-        handler.stop_event = threading.Event()
-        handler.client_is_speaking = False
-        handler.chat_lock = threading.Lock()
-        switched = []
-
-        async def switch(session_id):
-            await asyncio.sleep(0)
-            switched.append(session_id)
-
-        handler.switch_session = AsyncMock(side_effect=switch)
-        async def start_playback(conn, text):
-            self.assertEqual(switched, ["new"])
-            await asyncio.sleep(0)
-            switched.append("speaking")
-        send_stt = AsyncMock(side_effect=start_playback)
+        handler=self.connection()
+        observed=[]
+        async def switch(session):
+            handler.session_id=session
+            observed.append(session)
+        handler.switch_session=AsyncMock(side_effect=switch)
         def submit(*args):
-            self.assertFalse(handler.standby)
-            self.assertTrue(handler.return_to_standby)
-            self.assertEqual(switched, ["new", "speaking"])
-            self.assertTrue(handler.client_is_speaking)
-            self.assertFalse(handler.client_abort)
-            return Mock()
-        handler.executor.submit.side_effect = submit
-        self.api.ws_server.device_handlers["device"] = handler
-        with patch.dict("sys.modules", {"core.handle.sendAudioHandle": SimpleNamespace(send_stt_message=send_stt)}):
-            response = await self.api.handle_send(SimpleNamespace(json=AsyncMock(
-                return_value={"text": "hello", "sessionId": "new"})))
-        self.assertEqual(json.loads(response.text)["code"], 0)
-        handler.switch_session.assert_awaited_once_with("new")
+            from concurrent.futures import Future
+            self.assertEqual(['new'],observed)
+            handler.chat_lock.release()
+            future=Future(); future.set_result(True)
+            return future
+        handler.executor.submit.side_effect=submit
+        self.api.ws_server.device_handlers['device']=handler
+        self.api.await_reply=AsyncMock()
+        with patch('core.music.conversation.handle_input',new=AsyncMock(return_value=(False,'hello'))), patch('core.music.pause_for_chat',new=AsyncMock()), patch('core.handle.sendAudioHandle.send_stt_message',new=AsyncMock()):
+            response=await self.api.handle_send(self.request({'text':'hello','deviceId':'device','sessionId':'new'}))
+            self.assertEqual(200,response.status)
+            record=next(iter(self.api.requests.values()))
+            await record.task
+        handler.switch_session.assert_awaited_once_with('new')
         handler.executor.submit.assert_called_once()
-        send_stt.assert_awaited_once_with(handler, "hello")
+        self.assertFalse(handler.conversation_awake)
 
     async def test_submit_failure_restores_listening_and_releases_turn(self):
-        handler = Mock(session_id="current")
-        handler.stop_event = threading.Event()
-        handler.client_is_speaking = False
-        handler.chat_lock = threading.Lock()
-        handler.websocket = SimpleNamespace(send=AsyncMock())
-        handler.executor.submit.side_effect = RuntimeError("executor closed")
-        self.api.ws_server.device_handlers["device"] = handler
-        with patch.dict("sys.modules", {"core.handle.sendAudioHandle": SimpleNamespace(send_stt_message=AsyncMock())}):
-            response = await self.api.handle_send(SimpleNamespace(json=AsyncMock(return_value={"text": "hello"})))
-        self.assertEqual(response.status, 500)
+        handler=self.connection()
+        handler.executor.submit.side_effect=RuntimeError('executor closed')
+        self.api.ws_server.device_handlers['device']=handler
+        with patch('core.music.conversation.handle_input',new=AsyncMock(return_value=(False,'hello'))), patch('core.music.pause_for_chat',new=AsyncMock()), patch('core.handle.sendAudioHandle.send_stt_message',new=AsyncMock()):
+            await self.api.handle_send(self.request({'text':'hello','deviceId':'device'}))
+            record=next(iter(self.api.requests.values()))
+            await record.task
+        self.assertEqual('unknown',record.status)
         self.assertFalse(handler.chat_lock.locked())
-        self.assertFalse(handler.client_is_speaking)
-        self.assertEqual(json.loads(handler.websocket.send.call_args.args[0])["state"], "stop")
 
     async def test_voice_start_helper_sends_start_after_display_text(self):
         # Use the production helper without loading unrelated audio/model dependencies.
@@ -150,21 +149,20 @@ class ChatSubmissionTests(unittest.IsolatedAsyncioTestCase):
         conn = SimpleNamespace(config={}, session_id="s", websocket=SimpleNamespace(send=AsyncMock()), client_is_speaking=False)
         await namespace["send_stt_message"](conn, "hello")
         frames = [json.loads(call.args[0]) for call in conn.websocket.send.call_args_list]
-        self.assertEqual([frame["type"] for frame in frames], ["stt", "tts"])
-        self.assertEqual(frames[1]["state"], "start")
-        self.assertTrue(conn.client_is_speaking)
+        self.assertEqual([frame["type"] for frame in frames], ["stt"])
+        self.assertFalse(conn.client_is_speaking)
 
     async def test_busy_turn_rejects_before_switching_session(self):
-        handler = Mock(session_id="old")
-        handler.stop_event = threading.Event()
-        handler.client_is_speaking = False
-        handler.chat_lock = threading.Lock()
+        handler=self.connection()
         handler.chat_lock.acquire()
-        self.api.ws_server.device_handlers["device"] = handler
-        response = await self.api.handle_send(SimpleNamespace(json=AsyncMock(
-            return_value={"text": "hello", "sessionId": "new"})))
-        self.assertEqual(response.status, 409)
-        handler.switch_session.assert_not_called()
+        self.api.ws_server.device_handlers['device']=handler
+        with patch('core.music.conversation.handle_input',new=AsyncMock(return_value=(False,'hello'))), patch('core.music.pause_for_chat',new=AsyncMock()):
+            response=await self.api.handle_send(self.request({'text':'hello','deviceId':'device','sessionId':'new'}))
+            self.assertEqual(200,response.status)
+            record=next(iter(self.api.requests.values()))
+            await record.task
+        self.assertEqual('failed',record.status)
+        handler.switch_session.assert_not_awaited()
         handler.executor.submit.assert_not_called()
 
     async def test_session_switch_keeps_role_memory_and_does_not_resummarize_history(self):

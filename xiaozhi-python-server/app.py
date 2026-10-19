@@ -1,3 +1,6 @@
+from config.private_environment import load_private_environment
+load_private_environment()
+
 import sys
 import uuid
 import signal

@@ -4,10 +4,10 @@ import unittest
 from datetime import datetime,date
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock,patch
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider,format_memories,MAX_PROMPT_CHARS
-from core.providers.memory.mem_local_short.facts import (CHECKS,redact,redact_tree,validate_fact,render_fact,fact_key,audit_approved,evidence_matches,check_numeric_transition)
+from legacy_memory.mem_local_short import MemoryProvider,format_memories,MAX_PROMPT_CHARS
+from legacy_memory.facts import (CHECKS,redact,redact_tree,validate_fact,render_fact,fact_key,audit_approved,evidence_matches,check_numeric_transition)
 
-MODULE="core.providers.memory.mem_local_short.mem_local_short"
+MODULE="legacy_memory.mem_local_short"
 WHEN=datetime(2026,9,13,10,0)
 
 class FaultInjectedProvider(MemoryProvider):
@@ -32,9 +32,9 @@ class Llm:
     def __init__(self,*responses): self.responses=list(responses); self.calls=[]
     def response_no_stream(self,system,data,**kwargs):
         payload=json.loads(data)
-        from core.providers.memory.mem_local_short.protocol import EXTRACTION_REVIEW_PROMPT
+        from legacy_memory.protocol import EXTRACTION_REVIEW_PROMPT
         if system==EXTRACTION_REVIEW_PROMPT: return json.dumps({"facts":payload["candidates"]},ensure_ascii=False)
-        from core.providers.memory.mem_local_short.management import RECENT_PROMPT,COVERAGE_PROMPT,RESOLVE_PROMPT,REPAIR_PROMPT,SOURCE_REPAIR_PROMPT,QUANTITY_BIND_PROMPT,ENTITY_BIND_PROMPT
+        from legacy_memory.management import RECENT_PROMPT,COVERAGE_PROMPT,RESOLVE_PROMPT,REPAIR_PROMPT,SOURCE_REPAIR_PROMPT,QUANTITY_BIND_PROMPT,ENTITY_BIND_PROMPT
         if system==RECENT_PROMPT: return json.dumps({"entities":[]})
         if system==COVERAGE_PROMPT: return json.dumps({"missingFacts":[]})
         if system==REPAIR_PROMPT: return json.dumps({"operation":{"action":"none"},"correctedSource":None})

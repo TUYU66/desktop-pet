@@ -115,6 +115,7 @@ public:
     bool IsIdle();
     void WaitForPlaybackQueueEmpty();
     bool WaitForPlaybackQueueEmpty(int timeout_ms);
+    uint32_t GetPlaybackEpoch();
     bool IsWakeWordRunning() const { return xEventGroupGetBits(event_group_) & AS_EVENT_WAKE_WORD_RUNNING; }
     bool IsAudioProcessorRunning() const { return xEventGroupGetBits(event_group_) & AS_EVENT_AUDIO_PROCESSOR_RUNNING; }
     bool IsAfeWakeWord();
@@ -133,7 +134,7 @@ public:
 
     bool PushPacketToDecodeQueue(std::unique_ptr<AudioStreamPacket> packet, bool wait = false);
     std::unique_ptr<AudioStreamPacket> PopPacketFromSendQueue();
-    void PlaySound(const std::string_view& sound);
+    void PlaySound(const std::string_view& sound, std::function<bool()> continue_playing = {});
     bool ReadAudioData(std::vector<int16_t>& data, int sample_rate, int samples);
     void ResetDecoder();
     void SetModelsList(srmodel_list_t* models_list);

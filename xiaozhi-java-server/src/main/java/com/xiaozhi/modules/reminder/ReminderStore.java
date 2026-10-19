@@ -8,6 +8,8 @@ import java.util.*;
 
 @Service
 public class ReminderStore {
+    public static final long ROUND_MS=45_000L;
+    public static final long RETRY_MS=300_000L;
     public static final long GRACE_MS=30*60_000L;
     public static final long FINISHED_RETENTION_MS=7*24*60*60_000L;
     private final JdbcTemplate jdbc;
@@ -44,7 +46,7 @@ public class ReminderStore {
         r.getString("device_id"),r.getString("title"),r.getString("status"),r.getLong("due_at"),
         r.getLong("next_attempt_at"),r.getLong("expires_at"),r.getLong("version"),r.getString("attempt_id"),
         r.getString("last_error"),r.getLong("created_at"),r.getLong("updated_at"),r.getLong("initial_seconds"),
-        r.getString("plan_id"),r.getInt("delivery_count"),r.getLong("ack_deadline"),r.getLong("requested_at"),r.getString("task_id"),r.getLong("original_due_at"),r.getLong("scheduled_at"));
+        r.getString("plan_id"),r.getInt("delivery_count"),r.getLong("ack_deadline"),r.getLong("requested_at"),r.getString("task_id"),r.getLong("original_due_at"),r.getLong("scheduled_at"),r.getLong("round_started_at"));
     public static class Conflict extends RuntimeException { public Conflict(String message) { super(message); } }
 
     /** 现有设备表不是完整多租户绑定，首版只允许唯一启用账户使用提醒。 */
@@ -62,19 +64,19 @@ public class ReminderStore {
         return rows.get(0);
     }
     public List<Reminder> list(long owner) {
-        return jdbc.query("SELECT * FROM user_reminder WHERE user_id=? AND task_id IS NULL AND history_deleted=false ORDER BY CASE WHEN status IN ('completed','cancelled','expired','missed') THEN 1 ELSE 0 END, due_at DESC LIMIT 200",ROW,owner);
+        return jdbc.query("SELECT * FROM user_reminder WHERE user_id=? AND task_id IS NULL AND history_deleted=false ORDER BY CASE WHEN status IN ('completed','cancelled') THEN 2 WHEN status IN ('expired','missed') THEN 1 ELSE 0 END, due_at LIMIT 200",ROW,owner);
     }
     public List<Reminder> linked(long owner) { return jdbc.query("SELECT * FROM user_reminder WHERE user_id=? AND task_id IS NOT NULL",ROW,owner); }
     public List<Reminder> legacy(long owner) { return jdbc.query("SELECT * FROM user_reminder WHERE user_id=? AND task_id IS NULL AND history_deleted=false ORDER BY CASE WHEN status IN ('completed','cancelled','expired','missed') THEN 1 ELSE 0 END,due_at DESC LIMIT 200",ROW,owner); }
     public long unanswered(long owner) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder r WHERE user_id=? AND task_id IS NULL AND history_deleted=false AND status IN ('awaiting_confirmation','retry_pending','delivery_unknown','missed')",Long.class,owner);
+        return jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder r WHERE user_id=? AND task_id IS NULL AND history_deleted=false AND status IN ('awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')",Long.class,owner);
     }
     public long visibleCount(long owner,String device) {
         return device==null?jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE user_id=? AND task_id IS NULL AND history_deleted=false",Long.class,owner):
             jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false",Long.class,owner,device);
     }
     public long unansweredForDevice(long owner,String device) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false AND status IN ('awaiting_confirmation','retry_pending','delivery_unknown','missed')",Long.class,owner,device);
+        return jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false AND status IN ('awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')",Long.class,owner,device);
     }
     private static final String FOLLOWUP_STAGE="(CASE status WHEN 'retry_pending' THEN next_attempt_at WHEN 'expired' THEN updated_at*8+2 WHEN 'missed' THEN updated_at*8+3 WHEN 'delivery_unknown' THEN updated_at*8+4 ELSE 0 END)";
     private static final String FOLLOWUP_ELIGIBLE="task_id IS NULL AND history_deleted=false AND (status='retry_pending' AND next_attempt_at>? OR status='delivery_unknown' OR status IN ('expired','missed') AND updated_at>=?)";
@@ -82,30 +84,30 @@ public class ReminderStore {
     @Transactional
     public void refreshCatchup(long owner,String device,long now) {
         jdbc.update("UPDATE user_reminder SET status='delivery_unknown',last_error='发送中断，请核实或重新安排',version=version+1,updated_at=? WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false AND status='dispatching' AND updated_at<?",now,owner,device,now-240_000);
-        jdbc.update("UPDATE user_reminder SET status=CASE WHEN delivery_count>=3 THEN 'missed' ELSE 'retry_pending' END,next_attempt_at=ack_deadline+300000,last_error='未收到回应',version=version+1,updated_at=? WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false AND status='awaiting_confirmation' AND ack_deadline>0 AND ack_deadline<=?",now,owner,device,now);
-        jdbc.update("UPDATE user_reminder SET status='expired',last_error='超过到期后30分钟，已停止自动补发',version=version+1,updated_at=? WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false AND status='scheduled' AND expires_at<=?",now,owner,device,now);
+        jdbc.update("UPDATE user_reminder SET status=CASE WHEN delivery_count>=3 THEN 'expired' ELSE 'retry_pending' END,next_attempt_at=ack_deadline+300000,last_error='未收到回应',version=version+1,updated_at=? WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false AND status='awaiting_confirmation' AND ack_deadline>0 AND ack_deadline<=?",now,owner,device,now);
+        jdbc.update("UPDATE user_reminder SET status='delivery_unknown',last_error='到期后一直未成功送达，请确认或重新安排',version=version+1,updated_at=? WHERE user_id=? AND device_id=? AND task_id IS NULL AND history_deleted=false AND status='scheduled' AND expires_at<=?",now,owner,device,now);
     }
     public List<Reminder> catchupItems(long owner,String device,long now) {
-        return jdbc.query("SELECT * FROM user_reminder WHERE user_id=? AND device_id=? AND "+FOLLOWUP_ELIGIBLE+" AND followup_stage>=? ORDER BY scheduled_at,id LIMIT 3",ROW,owner,device,now,now-FINISHED_RETENTION_MS,-now);
+        return jdbc.query("SELECT * FROM user_reminder WHERE user_id=? AND device_id=? AND "+FOLLOWUP_ELIGIBLE+" AND followup_stage>=? ORDER BY scheduled_at,id LIMIT 3",ROW,owner,device,now,0L,-now);
     }
     public long catchupCount(long owner,String device,long now) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE user_id=? AND device_id=? AND "+FOLLOWUP_ELIGIBLE+" AND followup_stage>=?",Long.class,owner,device,now,now-FINISHED_RETENTION_MS,-now);
+        return jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE user_id=? AND device_id=? AND "+FOLLOWUP_ELIGIBLE+" AND followup_stage>=?",Long.class,owner,device,now,0L,-now);
     }
     /** Negative stage is a 90-second lease. Playback is not the user's confirmation;
      * an unanswered reminder remains eligible on the next explicit interaction. */
     @Transactional
     public boolean claimFollowup(long owner,String device,String id,String token,long stage,long now) {
         UUID.fromString(token);
-        return jdbc.update("UPDATE user_reminder SET followup_stage=?,followup_token=?,version=version+1 WHERE id=? AND user_id=? AND device_id=? AND "+FOLLOWUP_ELIGIBLE+" AND "+FOLLOWUP_STAGE+"=? AND followup_stage>=?",-(now+90_000),token,id,owner,device,now,now-FINISHED_RETENTION_MS,stage,-now)==1;
+        return jdbc.update("UPDATE user_reminder SET followup_stage=?,followup_token=?,version=version+1 WHERE id=? AND user_id=? AND device_id=? AND "+FOLLOWUP_ELIGIBLE+" AND "+FOLLOWUP_STAGE+"=? AND followup_stage>=?",-(now+90_000),token,id,owner,device,now,0L,stage,-now)==1;
     }
     public boolean followupValid(long owner,String device,String id,String token,long now) {
-        return Objects.equals(jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE id=? AND user_id=? AND device_id=? AND followup_token=? AND "+FOLLOWUP_ELIGIBLE+" AND followup_stage<?",Long.class,id,owner,device,token,now,now-FINISHED_RETENTION_MS,-now),1L);
+        return Objects.equals(jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE id=? AND user_id=? AND device_id=? AND followup_token=? AND "+FOLLOWUP_ELIGIBLE+" AND followup_stage<?",Long.class,id,owner,device,token,now,0L,-now),1L);
     }
     public boolean followupValid(long owner,String device,String id,String token,long stage,long now) {
-        return Objects.equals(jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE id=? AND user_id=? AND device_id=? AND followup_token=? AND "+FOLLOWUP_ELIGIBLE+" AND "+FOLLOWUP_STAGE+"=? AND followup_stage<?",Long.class,id,owner,device,token,now,now-FINISHED_RETENTION_MS,stage,-now),1L);
+        return Objects.equals(jdbc.queryForObject("SELECT COUNT(*) FROM user_reminder WHERE id=? AND user_id=? AND device_id=? AND followup_token=? AND "+FOLLOWUP_ELIGIBLE+" AND "+FOLLOWUP_STAGE+"=? AND followup_stage<?",Long.class,id,owner,device,token,now,0L,stage,-now),1L);
     }
     public boolean finishFollowup(long owner,String device,String id,String token,long stage,long now) {
-        return jdbc.update("UPDATE user_reminder SET followup_stage=?,followup_token=NULL,version=version+1 WHERE id=? AND user_id=? AND device_id=? AND followup_token=? AND "+FOLLOWUP_ELIGIBLE+" AND "+FOLLOWUP_STAGE+"=? AND followup_stage<?",stage,id,owner,device,token,now,now-FINISHED_RETENTION_MS,stage,-now)==1;
+        return jdbc.update("UPDATE user_reminder SET followup_stage=?,followup_token=NULL,version=version+1 WHERE id=? AND user_id=? AND device_id=? AND followup_token=? AND "+FOLLOWUP_ELIGIBLE+" AND "+FOLLOWUP_STAGE+"=? AND followup_stage<?",stage,id,owner,device,token,now,0L,stage,-now)==1;
     }
     public void releaseFollowup(long owner,String device,String id,String token) {
         jdbc.update("UPDATE user_reminder SET followup_stage=0,followup_token=NULL,version=version+1 WHERE id=? AND user_id=? AND device_id=? AND followup_token=? AND followup_stage<0 AND task_id IS NULL",id,owner,device,token);
@@ -115,12 +117,12 @@ public class ReminderStore {
         int changed=jdbc.update("UPDATE user_reminder SET history_deleted=true,updated_at=?,version=version+1 WHERE user_id=? AND id=? AND version=? AND task_id IS NULL AND history_deleted=false AND status IN ('completed','cancelled','expired','missed')",now,owner,id,version);
         if(changed!=1) throw new Conflict("只能删除已结束且未变化的记录，请刷新后重试");
     }
-    /** 结束状态保留七天，从最后一次进入结束状态的时间起算；周期计划不在此表内。 */
+    /** 已确认和取消的历史保留七天；未回应的逾期提醒保留到用户处理。 */
     public int pruneFinishedHistory(long now) {
         // A future occurrence may be moved earlier than its original date.
         // Keep its ID as a tombstone so the plan cannot generate it again.
-        jdbc.update("UPDATE user_reminder SET history_deleted=true WHERE task_id IS NULL AND plan_id IS NOT NULL AND requested_at<>original_due_at AND status IN ('completed','cancelled','expired','missed') AND updated_at<?",now-FINISHED_RETENTION_MS);
-        return jdbc.update("DELETE FROM user_reminder WHERE task_id IS NULL AND (plan_id IS NULL OR requested_at=original_due_at) AND status IN ('completed','cancelled','expired','missed') AND updated_at<?",
+        jdbc.update("UPDATE user_reminder SET history_deleted=true WHERE task_id IS NULL AND plan_id IS NOT NULL AND requested_at<>original_due_at AND status IN ('completed','cancelled') AND updated_at<?",now-FINISHED_RETENTION_MS);
+        return jdbc.update("DELETE FROM user_reminder WHERE task_id IS NULL AND (plan_id IS NULL OR requested_at=original_due_at) AND status IN ('completed','cancelled') AND updated_at<?",
             now-FINISHED_RETENTION_MS);
     }
     public static long delayMillis(long seconds) {
@@ -152,17 +154,18 @@ public class ReminderStore {
     @Transactional
     public Reminder act(long owner,String id,long version,String action,long seconds,long now) {
         var old=get(owner,id);
+        if(action.equals("confirm")&&old.status().equals("completed")) return old;
         if(old.version()!=version) throw new Conflict("提醒已变化，请刷新后重试");
-        if(old.status().equals("dispatching")) throw new Conflict("正在发送提醒，请稍后操作");
+        if(old.status().equals("dispatching")&&!Set.of("confirm","snooze").contains(action)) throw new Conflict("正在发送提醒，请稍后操作");
         String status;
         long due=old.dueAt();
         switch(action) {
             case "confirm" -> {
-                if(!Set.of("awaiting_confirmation","delivery_unknown","retry_pending","missed","expired").contains(old.status())) throw new Conflict("此提醒尚未进入确认阶段");
+                if(!Set.of("scheduled","dispatching","awaiting_confirmation","delivery_unknown","retry_pending","missed","expired").contains(old.status())||old.dueAt()>now) throw new Conflict("此提醒尚未进入确认阶段");
                 status="completed";
             }
             case "snooze" -> {
-                if(!Set.of("awaiting_confirmation","delivery_unknown","expired","retry_pending","missed").contains(old.status())) throw new Conflict("此状态不能稍后提醒");
+                if(!Set.of("scheduled","dispatching","awaiting_confirmation","delivery_unknown","expired","retry_pending","missed").contains(old.status())||old.dueAt()>now) throw new Conflict("此状态不能稍后提醒");
                 due=now+delayMillis(seconds); status="scheduled";
             }
             case "cancel" -> {
@@ -171,7 +174,7 @@ public class ReminderStore {
             }
             default -> throw new IllegalArgumentException("未知操作");
         }
-        int changed=jdbc.update("UPDATE user_reminder SET status=?,due_at=?,next_attempt_at=?,expires_at=?,scheduled_at=?,attempt_id=NULL,last_error=NULL,ack_deadline=0,delivery_count=0,followup_stage=0,followup_token=NULL,updated_at=?,version=version+1 WHERE id=? AND user_id=? AND version=? AND status=?",
+        int changed=jdbc.update("UPDATE user_reminder SET status=?,due_at=?,next_attempt_at=?,expires_at=?,scheduled_at=?,attempt_id=NULL,last_error=NULL,ack_deadline=0,round_started_at=0,delivery_count="+(action.equals("snooze")?"0":"delivery_count")+",followup_stage=0,followup_token=NULL,updated_at=?,version=version+1 WHERE id=? AND user_id=? AND version=? AND status=?",
             status,due,due,due+GRACE_MS,action.equals("snooze")?due:old.scheduledAt(),now,id,owner,version,old.status());
         if(changed!=1) throw new Conflict("提醒已变化，请刷新后重试");
         return get(owner,id);
@@ -180,23 +183,49 @@ public class ReminderStore {
         // 中途退出时不假设未播出，避免服务重启后重复提醒。
         jdbc.update("UPDATE user_reminder SET status='delivery_unknown',last_error='发送中断，请核实或重新安排',version=version+1,updated_at=? WHERE task_id IS NULL AND status='dispatching' AND updated_at<?",now,now-240_000);
         // 兼容旧版已发送记录：没有确认期限的历史记录不自动重播。
-        jdbc.update("UPDATE user_reminder SET status=CASE WHEN delivery_count>=3 THEN 'missed' ELSE 'retry_pending' END,next_attempt_at=ack_deadline+300000,last_error='未收到回应',version=version+1,updated_at=? WHERE task_id IS NULL AND status='awaiting_confirmation' AND ack_deadline>0 AND ack_deadline<=?",now,now);
-        jdbc.update("UPDATE user_reminder SET status='scheduled',due_at=next_attempt_at,expires_at=next_attempt_at+1800000,attempt_id=NULL,ack_deadline=0,version=version+1,updated_at=? WHERE task_id IS NULL AND status='retry_pending' AND next_attempt_at<=?",now,now);
-        jdbc.update("UPDATE user_reminder SET status='expired',last_error='超过到期后30分钟，已停止自动补发',version=version+1,updated_at=? WHERE task_id IS NULL AND status='scheduled' AND expires_at<=?",now,now);
+        jdbc.update("UPDATE user_reminder SET status=CASE WHEN delivery_count>=3 THEN 'expired' ELSE 'retry_pending' END,next_attempt_at=ack_deadline+300000,last_error='未收到回应',version=version+1,updated_at=? WHERE task_id IS NULL AND status='awaiting_confirmation' AND ack_deadline>0 AND ack_deadline<=?",now,now);
+        jdbc.update("UPDATE user_reminder SET status='scheduled',due_at=next_attempt_at,expires_at=next_attempt_at+1800000,attempt_id=NULL,ack_deadline=0,round_started_at=0,version=version+1,updated_at=? WHERE task_id IS NULL AND status='retry_pending' AND next_attempt_at<=?",now,now);
+        jdbc.update("UPDATE user_reminder SET status='delivery_unknown',last_error='到期后一直未成功送达，请确认或重新安排',version=version+1,updated_at=? WHERE task_id IS NULL AND status='scheduled' AND expires_at<=?",now,now);
+        // Do not drain an old offline backlog into continuous speech after reconnect.
+        // No round was delivered, so preserve it as actionable rather than blame non-response.
+        jdbc.update("UPDATE user_reminder SET status='delivery_unknown',last_error='错过通知时间，未成功送达，请确认或重新安排',version=version+1,updated_at=? WHERE task_id IS NULL AND history_deleted=false AND status='scheduled' AND delivery_count=0 AND due_at<?",now,now-RETRY_MS);
         // Return all currently due reminders so a device can receive a numbered batch.
         // Future reminders are never announced early, even when only a minute apart.
-        return jdbc.query("SELECT * FROM user_reminder r WHERE r.status='scheduled' AND r.next_attempt_at<=? AND r.expires_at>? AND r.task_id IS NULL AND r.history_deleted=false "
-            +"ORDER BY r.next_attempt_at,r.id LIMIT 128",ROW,now,now);
+        return jdbc.query("SELECT * FROM user_reminder r WHERE r.next_attempt_at<=? AND r.expires_at>? AND r.task_id IS NULL AND r.history_deleted=false "
+            +"AND (r.status='scheduled' OR r.status='awaiting_confirmation' AND r.attempt_id IS NULL AND r.ack_deadline>?) "
+            +"ORDER BY r.next_attempt_at,r.id LIMIT 128",ROW,now,now,now);
     }
     @Transactional
     public boolean claim(Reminder reminder,String attempt,long now) {
-        return jdbc.update("UPDATE user_reminder SET status='dispatching',attempt_id=?,updated_at=?,version=version+1 WHERE id=? AND status='scheduled' AND version=? AND expires_at>? AND task_id IS NULL",
+        return jdbc.update("UPDATE user_reminder SET status=CASE WHEN status='scheduled' THEN 'dispatching' ELSE status END,attempt_id=?,updated_at=?,version=version+1 WHERE id=? AND status IN ('scheduled','awaiting_confirmation') AND attempt_id IS NULL AND version=? AND expires_at>? AND task_id IS NULL",
             attempt,now,reminder.id(),reminder.version(),now)==1;
     }
+    /** The first visible web popup or actual hardware speech starts ONE shared round. */
+    @Transactional
+    public Reminder start(long owner,String id,long dueAt,String attempt,long now) {
+        var item=get(owner,id);
+        if(item.dueAt()!=dueAt||dueAt>now) throw new Conflict("这一轮提醒已变化，请刷新");
+        if(attempt!=null&&!Objects.equals(attempt,item.attemptId())) throw new Conflict("发送轮次已变化");
+        if(!Set.of("scheduled","dispatching").contains(item.status())) return item;
+        int changed=jdbc.update("UPDATE user_reminder SET status='awaiting_confirmation',round_started_at=?,ack_deadline=?,delivery_count=delivery_count+1,last_error=NULL,version=version+1,updated_at=? WHERE user_id=? AND id=? AND due_at=? AND version=? AND status IN ('scheduled','dispatching') AND delivery_count<3 AND history_deleted=false AND task_id IS NULL",
+            now,now+ROUND_MS,now,owner,id,dueAt,item.version());
+        if(changed!=1) throw new Conflict("提醒状态已变化，请刷新");
+        return get(owner,id);
+    }
     public void finish(Reminder reminder,String attempt,String outcome,String error,long now) {
-        String status=switch(outcome) { case "sent"->"awaiting_confirmation"; case "retry"->now>=reminder.expiresAt()?"expired":"scheduled"; default->"delivery_unknown"; };
-        jdbc.update("UPDATE user_reminder SET status=?,last_error=?,next_attempt_at=?,updated_at=?,ack_deadline=?,delivery_count=delivery_count+?,version=version+1 WHERE id=? AND task_id IS NULL AND status='dispatching' AND attempt_id=?",
-            status,error,now+15_000,now,outcome.equals("sent")?now+60_000:0,outcome.equals("sent")?1:0,reminder.id(),attempt);
+        if(outcome.equals("sent")) {
+            // Updated Python calls start before audio. This fallback supports an older sender.
+            try { start(reminder.userId(),reminder.id(),reminder.dueAt(),attempt,now); }
+            catch(Conflict|IllegalArgumentException ignored) { return; }
+            jdbc.update("UPDATE user_reminder SET last_error=NULL WHERE id=? AND task_id IS NULL AND status='awaiting_confirmation' AND attempt_id=?",reminder.id(),attempt);
+            return;
+        }
+        if(outcome.equals("retry")) {
+            jdbc.update("UPDATE user_reminder SET status=CASE WHEN status='awaiting_confirmation' THEN status WHEN expires_at<=? THEN 'delivery_unknown' ELSE 'scheduled' END,last_error=?,next_attempt_at=?,attempt_id=NULL,updated_at=?,version=version+1 WHERE id=? AND task_id IS NULL AND status IN ('dispatching','awaiting_confirmation') AND attempt_id=?",
+                now,error,now+15_000,now,reminder.id(),attempt);
+        } else {
+            jdbc.update("UPDATE user_reminder SET status=CASE WHEN status='awaiting_confirmation' THEN status ELSE 'delivery_unknown' END,last_error=?,updated_at=?,version=version+1 WHERE id=? AND task_id IS NULL AND status IN ('dispatching','awaiting_confirmation') AND attempt_id=?",error,now,reminder.id(),attempt);
+        }
     }
 
     public List<Reminder> forDevice(long owner,String device) {
@@ -204,8 +233,8 @@ public class ReminderStore {
     }
     /** 唤醒仅延长一次回答窗口，不确认提醒，不允许旧 attempt 修改新一轮。 */
     public void listening(long owner,String id,String attempt,long now) {
-        jdbc.update("UPDATE user_reminder SET ack_deadline=GREATEST(ack_deadline,?),version=version+1 WHERE id=? AND user_id=? AND attempt_id=? AND task_id IS NULL AND status='awaiting_confirmation' AND ack_deadline>? AND ack_deadline<?",
-            now+30_000,id,owner,attempt,now,now+30_000);
+        jdbc.update("UPDATE user_reminder SET ack_deadline=LEAST(round_started_at+55000,GREATEST(ack_deadline,?)),version=version+1 WHERE id=? AND user_id=? AND attempt_id=? AND task_id IS NULL AND status='awaiting_confirmation' AND round_started_at>0 AND ack_deadline>? AND ack_deadline<?",
+            now+10_000,id,owner,attempt,now,now+10_000);
     }
     public static void validateDate(long at,long now) {
         if(at<=now||at>now+5*366*86400_000L) throw new IllegalArgumentException("请选择未来5年内的明确日期和时间");
@@ -236,7 +265,7 @@ public class ReminderStore {
         validateDate(at,now);
         if(title==null||title.isBlank()||title.length()>120) throw new IllegalArgumentException("提醒内容需为1至120字");
         get(owner,id); // Reject archived todo-linked records before changing anything.
-        int changed=jdbc.update("UPDATE user_reminder SET title=?,status='scheduled',due_at=?,next_attempt_at=?,expires_at=?,scheduled_at=?,ack_deadline=0,delivery_count=0,followup_stage=0,followup_token=NULL,attempt_id=NULL,last_error=NULL,version=version+1,updated_at=? WHERE id=? AND user_id=? AND version=? AND status<>'dispatching'",title.trim(),at,at,at+GRACE_MS,at,now,id,owner,version);
+        int changed=jdbc.update("UPDATE user_reminder SET title=?,status='scheduled',due_at=?,next_attempt_at=?,expires_at=?,scheduled_at=?,ack_deadline=0,round_started_at=0,delivery_count=0,followup_stage=0,followup_token=NULL,attempt_id=NULL,last_error=NULL,version=version+1,updated_at=? WHERE id=? AND user_id=? AND version=? AND status<>'dispatching'",title.trim(),at,at,at+GRACE_MS,at,now,id,owner,version);
         if(changed!=1) throw new Conflict("提醒已变化或正在发送，请刷新后重试");
         return get(owner,id);
     }

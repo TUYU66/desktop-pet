@@ -1,3 +1,4 @@
+import PageDoodle from '../../components/PageDoodle';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, App, Button, Card, Empty, Form, Input, Modal, Popconfirm, Select, Spin, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
@@ -58,6 +59,7 @@ function SemanticHistory({ memory }: { memory: MemoryRecord }) {
 }
 
 function MemoryProvenance({ memory }: { memory: MemoryRecord }) {
+  if (memory.requiresMigration) return <p role="status">旧格式记录，需要核对后重新保存；可单独删除，不影响其他记忆。</p>;
   const fact = memoryData(memory);
   const source = memory.sourceType === 'manual' ? '手动保存' : fact.memoryMode === 'explicit' ? '主动要求记忆' : '自动记忆';
   return <>
@@ -220,7 +222,7 @@ export default function MemoryList() {
   };
 
   return <div className="memory-page page-width">
-    <div className="page-heading"><div><h1>长期记忆</h1><Typography.Paragraph type="secondary">
+    <div className="page-heading"><div><h1>长期记忆<PageDoodle kind="memory" /></h1><Typography.Paragraph type="secondary">
       {roleName} 会在每次回答前读取这里的内容。你可以补充、修正或删除任何一条。
     </Typography.Paragraph><Typography.Paragraph type="secondary">
       明确且有长期价值的个人信息、关系、喜好、习惯、目标和重要经历会自动记忆。其他无法归类的信息，仅在你明确要求时保存。日期表示当时的陈述，不会自动推算年龄或年级。
@@ -249,8 +251,8 @@ export default function MemoryList() {
             <span className="memory-category-count">{group.items.length} 条</span>
           </header>
           <div className="memory-group-list">{group.items.map(memory => <article className="memory-row" key={memory.id}>
-            <div className="memory-row-content">{view === 'recent' && <span className="memory-row-category">{categoryOf(memory).label}</span>}<p>{memory.content}</p><MemoryProvenance memory={memory} /></div>
-            <div className="memory-row-actions"><Button type="text" disabled={!writable} icon={<EditOutlined />} onClick={() => openEdit(memory)}>编辑</Button>
+            <div className="memory-row-content">{view === 'recent' && <span className="memory-row-category" data-category={categoryOf(memory).value}>{categoryOf(memory).label}</span>}<p>{memory.content}</p><MemoryProvenance memory={memory} /></div>
+            <div className="memory-row-actions"><Button type="text" disabled={!writable || memory.requiresMigration} icon={<EditOutlined />} onClick={() => openEdit(memory)}>编辑</Button>
               <Popconfirm title="删除这条记忆？" description={`删除后，${roleName}将不再读取这条内容。`} okText="删除" cancelText="取消" onConfirm={() => remove(memory.id)}>
                 <Button type="text" disabled={!writable} danger icon={<DeleteOutlined />}>删除</Button>
               </Popconfirm></div>

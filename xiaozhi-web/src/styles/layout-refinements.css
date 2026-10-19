@@ -1,0 +1,64 @@
+/* Scoped blue actions: keep the rest of the Notion palette unchanged. */
+.notion-theme .settings-page .ant-btn-primary:not(.ant-btn-dangerous),
+.notion-theme .qq-chat .composer .ant-btn-primary {
+  background: #2563c9;
+  border-color: #2563c9;
+  color: #fff;
+  font-weight: 600;
+  opacity: 1;
+  text-shadow: none;
+}
+.notion-theme .settings-page .ant-btn-primary:not(.ant-btn-dangerous):not(:disabled):hover,
+.notion-theme .qq-chat .composer .ant-btn-primary:not(:disabled):hover { background: #1d53b0; border-color: #1d53b0; color: #fff; }
+.notion-theme .settings-page .ant-btn-primary:not(.ant-btn-dangerous):disabled,
+.notion-theme .qq-chat .composer .ant-btn-primary:disabled { background: #e8eff9; border-color: #d6e0ee; color: #53647e; }
+.notion-theme .settings-page .ant-btn-primary > span,
+.notion-theme .qq-chat .composer .ant-btn-primary > span { color: inherit; font-size: 14px; }
+.notion-theme .settings-page .ant-btn-primary:focus-visible,
+.notion-theme .qq-chat .composer .ant-btn-primary:focus-visible { outline: 2px solid #2563c9; outline-offset: 3px; }
+.chat-header-slot { display: none; }
+
+@media (min-width: 761px) {
+  /* Audio levels stay above the face workspace; preview and controls share a row. */
+  .notion-theme .live-device-grid { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+  .notion-theme .live-device-grid > .live-control:not(.face-control) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 36px; }
+  .notion-theme .live-device-grid > .live-control:not(.face-control) > h3,
+  .notion-theme .live-device-grid > .live-control:not(.face-control) > .live-device-note { grid-column: 1 / -1; }
+  .notion-theme .device-level-control { margin: 10px 0 18px; }
+  .notion-theme .face-control { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px 24px; align-items: start; }
+  .notion-theme .face-control > h3 { grid-column: 1 / -1; }
+  .notion-theme .face-control > .face-preview-section { grid-column: 1; grid-row: 2 / span 3; }
+  .notion-theme .face-control > .face-control-section,
+  .notion-theme .face-control > .live-device-note { grid-column: 2; }
+  .notion-theme .face-control > .face-control-section { align-self: start; }
+  .notion-theme .face-control .lcd-face-screen { max-width: 320px; }
+
+  /* The chat heading is mounted in the main header, with one source of state. */
+  .notion-theme .app-header.is-chat-header { height: 72px; gap: 16px; padding-inline: 24px; line-height: 1.5; }
+  .notion-theme .is-chat-header .header-location > span { display: none; }
+  .notion-theme .is-chat-header .header-location { flex: 0 0 auto; }
+  .notion-theme .is-chat-header .header-actions { flex-shrink: 0; }
+  .notion-theme .chat-header-slot { display: block; flex: 1; min-width: 0; }
+  .notion-theme .chat-header-slot .chat-heading { display: flex; align-items: center; flex-wrap: nowrap; gap: 12px; padding: 0; border: 0; background: transparent; min-width: 0; }
+  .notion-theme .chat-header-slot .chat-persona { flex: 1; min-width: 0; }
+  .notion-theme .chat-header-slot h2 { margin: 0; font-size: 16px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .notion-theme .chat-header-slot .chat-persona p { margin: 1px 0 0; color: #787671; font-size: 11px; white-space: nowrap; }
+  .notion-theme .chat-header-slot .chat-avatar { flex-shrink: 0; }
+  .notion-theme .chat-header-slot .ant-tag { max-width: 190px; overflow: hidden; text-overflow: ellipsis; margin: 0; white-space: nowrap; }
+  .notion-theme .chat-header-slot .chat-avatar-link { margin-left: 0; padding: 6px 0; }
+  .notion-theme .chat-header-slot .page-doodle { width: 48px; height: 30px; margin: 0; }
+  .notion-theme .app-content:has(.has-integrated-header) { padding: 20px 32px 24px; }
+  .notion-theme .qq-chat.has-integrated-header { height: calc(100dvh - 116px); min-height: 360px; }
+}
+@media (min-width: 761px) and (max-width: 1100px) {
+  .notion-theme .app-header.is-chat-header { gap: 10px; padding-inline: 16px; }
+  .notion-theme .chat-header-slot .chat-heading { gap: 8px; }
+  .notion-theme .chat-header-slot .chat-persona p,
+  .notion-theme .chat-header-slot .page-doodle { display: none; }
+  .notion-theme .chat-header-slot .ant-tag { max-width: 144px; font-size: 11px; }
+  .notion-theme .chat-header-slot .chat-avatar-link { font-size: 12px; }
+  .notion-theme .is-chat-header .account-button > span:not(.ant-avatar) { display: none; }
+  .notion-theme .app-content:has(.has-integrated-header) { padding-inline: 20px; }
+  .notion-theme .face-expression-row { flex-wrap: wrap; }
+  .notion-theme .face-expression-row .ant-select { flex-basis: 100%; }
+}

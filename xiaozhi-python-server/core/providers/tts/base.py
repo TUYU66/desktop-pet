@@ -17,7 +17,7 @@ from config.logger import setup_logging
 from core.utils import opus_encoder_utils
 from core.utils.tts import MarkdownCleaner, convert_percentage_to_range
 from core.utils.output_counter import add_device_output
-from core.handle.reportHandle import enqueue_tts_report
+from core.reporting.chat_reports import enqueue_tts_report
 from core.handle.sendAudioHandle import sendAudioMessage
 from core.utils.util import audio_bytes_to_data_stream, audio_to_data_stream
 from core.providers.tts.dto.dto import (
@@ -242,7 +242,7 @@ class TTSProviderBase(ABC):
                 from core.conversation.requests import response_error
                 response_error(self.conn, getattr(self,'current_sentence_id',None))
                 return None
-    
+
     def to_tts(self, text):
         # 保留原始文本用于日志/显示
         original_text = text

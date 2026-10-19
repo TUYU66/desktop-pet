@@ -49,7 +49,7 @@ class ChassisMusicResumeTests(unittest.IsolatedAsyncioTestCase):
         with patch('core.handle.sendAudioHandle.sendAudio', new_callable=AsyncMock), \
                 patch('core.handle.sendAudioHandle.send_tts_message', side_effect=tts_state), \
                 patch('core.reminders.followup.deliver', new_callable=AsyncMock), \
-                patch('core.handle.reportHandle.enqueue_tool_report', Mock()), \
+                patch('core.reporting.chat_reports.enqueue_tool_report', Mock()), \
                 patch('core.handle.sendAudioHandle._confirm_chassis_for_music', new=confirmation or AsyncMock(return_value=True)), \
                 patch('core.conversation.standby.enter_standby', new_callable=AsyncMock), \
                 patch('core.music.playback.shutil.which', return_value='ffmpeg'):

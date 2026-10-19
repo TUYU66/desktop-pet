@@ -2,7 +2,7 @@
 import unittest
 import test_memory_management as fixtures
 from test_memory import fact, memory, extract, align, review
-from core.providers.memory.mem_local_short.management import SOURCE_REPAIR_PROMPT, COVERAGE_PROMPT, RESOLVE_PROMPT
+from legacy_memory.management import SOURCE_REPAIR_PROMPT, COVERAGE_PROMPT, RESOLVE_PROMPT
 
 
 class RepairRegressions(unittest.IsolatedAsyncioTestCase):

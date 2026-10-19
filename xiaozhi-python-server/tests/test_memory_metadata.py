@@ -1,7 +1,7 @@
 """内部属性代码与正文脱敏边界；手动运行，不调用真实服务。"""
 import unittest
 from test_memory import WHEN
-from core.providers.memory.mem_local_short.facts import validate_fact, redact_tree
+from legacy_memory.facts import validate_fact, redact_tree
 
 
 class MetadataTests(unittest.TestCase):

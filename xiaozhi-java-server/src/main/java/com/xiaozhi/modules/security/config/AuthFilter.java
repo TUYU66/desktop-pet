@@ -7,6 +7,7 @@ import com.xiaozhi.modules.user.dao.UserDao;
 import com.xiaozhi.modules.user.entity.UserEntity;
 import jakarta.annotation.Resource;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.cors.reactive.CorsUtils;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
@@ -19,6 +20,7 @@ import java.security.MessageDigest;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 /**
  * WebFlux 认证过滤器，校验 Bearer Token，设置用户上下文
@@ -34,24 +36,28 @@ public class AuthFilter implements WebFilter {
     @Value("${xiaozhi.memory-service-key:${XIAOZHI_MEMORY_SERVICE_KEY:}}")
     private String memoryServiceKey = "";
     @Value("${XIAOZHI_REMINDER_SERVICE_KEY:}") private String reminderServiceKey="";
+    @Value("${XIAOZHI_PYTHON_SERVICE_KEY:}") private String pythonServiceKey="";
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
         String path = exchange.getRequest().getPath().value();
         String method = exchange.getRequest().getMethod().name();
 
+        // Let the configured CORS processor validate the origin and requested method.
+        if (CorsUtils.isPreFlightRequest(exchange.getRequest())) {
+            return chain.filter(exchange);
+        }
+
         // 公开路径跳过认证
-        if (isPublicPath(path)) {
+        if (isPublicPath(path, method)) {
             return chain.filter(exchange);
         }
 
         // 记忆服务不允许“多用户时随意选第一个”。浏览器仍使用正常 Bearer 鉴权。
         String serviceKey=exchange.getRequest().getHeaders().getFirst("Service-Key");
         if(path.startsWith("/xiaozhi/api/reminders/internal/")||path.startsWith("/xiaozhi/api/tasks/internal/")) {
-            var remote=exchange.getRequest().getRemoteAddress();
-            boolean local=remote!=null&&remote.getAddress()!=null&&remote.getAddress().isLoopbackAddress();
-            String expected=reminderServiceKey.isBlank()?"xiaozhi-reminders":reminderServiceKey;
-            if(serviceKey==null||reminderServiceKey.isBlank()&&!local||!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),serviceKey.getBytes(StandardCharsets.UTF_8))) {
+            String expected=reminderServiceKey;
+            if(!validKey(expected,serviceKey)) {
                 exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED); return exchange.getResponse().setComplete();
             }
             return Mono.fromCallable(()->{
@@ -71,8 +77,8 @@ public class AuthFilter implements WebFilter {
         }
         if(path.startsWith("/xiaozhi/api/memories") && serviceKey!=null) {
             return Mono.fromCallable(()-> {
-                String expected=memoryServiceKey.isBlank()?"xiaozhi-python":memoryServiceKey;
-                if(!MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),serviceKey.getBytes(StandardCharsets.UTF_8)))
+                String expected=memoryServiceKey;
+                if(!validKey(expected,serviceKey))
                     return rejectMemory(exchange,"memory_service_key_invalid");
                 String owner=exchange.getRequest().getHeaders().getFirst("Memory-Owner-Id");
                 UserEntity user;
@@ -95,10 +101,15 @@ public class AuthFilter implements WebFilter {
             });
         }
 
-        // 其他个人版服务接口维持原约定；此处不再负责记忆接口。
-        if ("xiaozhi-python".equals(exchange.getRequest().getHeaders().getFirst("Service-Key"))) {
-            // 查第一个活跃用户作为上下文，让配置接口能正确返回数据
+        // Service identities have explicit capabilities, never browser/admin privileges.
+        if (serviceKey != null) {
+            if (!validKey(pythonServiceKey,serviceKey) || !pythonPath(path,method)) {
+                exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                return exchange.getResponse().setComplete();
+            }
             return Mono.fromCallable(() -> {
+                        var active=new LambdaQueryWrapper<UserEntity>().eq(UserEntity::getStatus,1);
+                        if(!Long.valueOf(1L).equals(userDao.selectCount(active))) return false;
                         UserEntity firstUser = userDao.selectOne(
                                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserEntity>()
                                         .eq(UserEntity::getStatus, 1)
@@ -107,10 +118,14 @@ public class AuthFilter implements WebFilter {
                         if (firstUser != null) {
                             exchange.getAttributes().put("currentUser", firstUser);
                         }
-                        return Boolean.TRUE;
+                        return firstUser != null;
                     })
                     .subscribeOn(Schedulers.boundedElastic())
-                    .flatMap(success -> chain.filter(exchange));
+                    .flatMap(success -> {
+                        if(success) return chain.filter(exchange);
+                        exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
+                        return exchange.getResponse().setComplete();
+                    });
         }
 
         // 只对 /xiaozhi/api/ 路径做认证
@@ -150,6 +165,11 @@ public class AuthFilter implements WebFilter {
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
+                    if(path.startsWith("/xiaozhi/api/admin/") &&
+                        !Integer.valueOf(1).equals(((UserEntity)exchange.getAttribute("currentUser")).getSuperAdmin())) {
+                        exchange.getResponse().setStatusCode(HttpStatus.FORBIDDEN);
+                        return exchange.getResponse().setComplete();
+                    }
                     return chain.filter(exchange);
                 });
     }
@@ -160,20 +180,22 @@ public class AuthFilter implements WebFilter {
         return false;
     }
 
-    private boolean isPublicPath(String path) {
-        // 公开认证路径 + Python Server 上报路径
-        return path.equals("/xiaozhi/api/health")
-                || path.contains("/auth/login")
-                || path.contains("/auth/register")
-                || path.contains("/auth/captcha")
-                || path.contains("/pub-config")
-                || path.contains("/oauth")
-                || path.contains("/chat/report")
-                || path.contains("/chat/title/generate")
-                || path.startsWith("/swagger-ui")
-                || path.startsWith("/v3/api-docs")
-                || path.startsWith("/doc.html")
-                || path.startsWith("/webjars");
+    private static boolean validKey(String expected,String supplied) {
+        return expected!=null&&!expected.isBlank()&&supplied!=null&&
+            MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),supplied.getBytes(StandardCharsets.UTF_8));
+    }
+
+    private boolean isPublicPath(String path,String method) {
+        return method.equals("GET")&&Set.of("/xiaozhi/api/health","/xiaozhi/api/auth/captcha","/xiaozhi/api/user/pub-config").contains(path)
+            || method.equals("POST")&&Set.of("/xiaozhi/api/auth/login","/xiaozhi/api/auth/register").contains(path);
+    }
+
+    private boolean pythonPath(String path,String method) {
+        return method.equals("GET")&&path.equals("/xiaozhi/api/user/config")
+            || method.equals("GET")&&path.matches("/xiaozhi/api/chat/session-by-role/[A-Za-z0-9_-]{1,128}")
+            || method.equals("GET")&&path.matches("/xiaozhi/api/chat/sessions/[A-Za-z0-9_-]{1,128}/memory")
+            || method.equals("POST")&&Set.of("/xiaozhi/api/chat/report","/xiaozhi/api/chat/title/generate").contains(path)
+            || Set.of("GET","POST").contains(method)&&path.matches("/xiaozhi/api/chat/memory/[A-Za-z0-9_-]{1,128}");
     }
 
     private String extractToken(ServerWebExchange exchange) {
@@ -181,7 +203,7 @@ public class AuthFilter implements WebFilter {
         if (StrUtil.isNotBlank(auth) && auth.startsWith("Bearer ")) {
             return auth.substring(7);
         }
-        // 也支持 query 参数
-        return exchange.getRequest().getQueryParams().getFirst("token");
+        // Login credentials belong in the header, never in URLs or access logs.
+        return null;
     }
 }

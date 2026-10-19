@@ -136,7 +136,7 @@ class VoiceTransportTests(unittest.IsolatedAsyncioTestCase):
             with patch('core.conversation.standby.request_standby', side_effect=standby), \
                     patch('core.handle.abortHandle.handleAbortMessage', new_callable=AsyncMock), \
                     patch('core.handle.sendAudioHandle.send_stt_message', new_callable=AsyncMock), \
-                    patch('core.handle.reportHandle.enqueue_asr_report') as report:
+                    patch('core.reporting.chat_reports.enqueue_asr_report') as report:
                 await api.execute(record, text, 'chosen')
             report.assert_called_once_with(conn, text, [])
             self.assertEqual('chosen', record.session)

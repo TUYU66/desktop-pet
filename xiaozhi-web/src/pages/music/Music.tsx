@@ -1,3 +1,4 @@
+import PageDoodle from '../../components/PageDoodle';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, App, Avatar, Button, Empty, Input, Popconfirm, Progress, Select, Space, Spin, Upload } from 'antd';
 import { UploadOutlined, PlayCircleOutlined, DeleteOutlined, ReloadOutlined, CustomerServiceOutlined } from '@ant-design/icons';
@@ -9,6 +10,7 @@ import NeteaseMusic from './NeteaseMusic';
 import { neteaseApi } from '../../api/netease';
 import { albumCover } from './lyrics';
 import { currentPlayerSource } from './currentPlayer';
+import { startPolling } from '../../utils/polling';
 
 type Track = { id: string; name: string; title: string; artist: string; size: number; album?: string; cover?: string; neteaseId?: string };
 type Device = { id: string; name?: string; status: Status };
@@ -38,6 +40,7 @@ export default function Music() {
   const controlRevision = useRef(0);
   const snapshotRevision = useRef(0);
   const operationRevision = useRef(0);
+  const statusInterval = useRef(6000);
   const refreshStatus = useCallback(async () => {
     if (statusFetching.current) return;
     statusFetching.current = true;
@@ -51,10 +54,16 @@ export default function Music() {
       if (!mounted.current || epoch !== lifecycle.current) return;
       if (revision === controlRevision.current && snapshot === snapshotRevision.current) {
         setDevices(result.data.devices);
+        statusInterval.current = result.data.devices.some(device =>
+          [device.status, ...Object.values(device.status.players || {})].some(player =>
+            player.state === 'playing' || player.state === 'loading')) ? 2000 : 6000;
         setDeviceId(old => result.data.devices.some(d => d.id === old) ? old : result.data.devices[0]?.id || '');
       }
       setError('');
-    } catch { if (mounted.current && epoch === lifecycle.current && !controller.signal.aborted) setError('暂时无法连接音乐服务，请确认服务已启动后刷新。'); }
+    } catch {
+      if (mounted.current && epoch === lifecycle.current && !controller.signal.aborted) setError('暂时无法连接音乐服务，请确认服务已启动后刷新。');
+      return false;
+    }
     finally { if (epoch === lifecycle.current) statusFetching.current = false; }
   }, []);
   const refresh = useCallback((): Promise<void> => {
@@ -97,12 +106,13 @@ export default function Music() {
     mounted.current = true;
     ++lifecycle.current;
     void refresh();
-    const poll = () => { if (!document.hidden) void refreshStatus(); };
-    const id = setInterval(poll, 2000);
-    document.addEventListener('visibilitychange', poll);
+    const polling = startPolling(async signal => {
+      signal.addEventListener('abort', () => statusController.current?.abort(), { once: true });
+      return refreshStatus();
+    }, { interval: () => statusInterval.current, maxInterval: 30000, leading: false });
     return () => {
       mounted.current = false; ++lifecycle.current;
-      clearInterval(id); document.removeEventListener('visibilitychange', poll);
+      polling.stop();
       libraryController.current?.abort(); statusController.current?.abort();
       libraryRequest.current = null; libraryRefreshQueued.current = false; statusFetching.current = false;
     };
@@ -155,7 +165,7 @@ export default function Music() {
     </div>
   </>;
   return <div className="music-page">
-    <header className="music-heading"><div><h1>音乐空间</h1><p>从网易云歌单或本地歌曲中选歌，在桌面宠物上播放。</p></div><Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新</Button></header>
+    <header className="music-heading"><div><h1>音乐空间<PageDoodle kind="music" /></h1><p>从网易云歌单或本地歌曲中选歌，在桌面宠物上播放。</p></div><Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新</Button></header>
     {(error || libraryError) && <Alert type="warning" showIcon message={error || libraryError} />}
     {devices.length > 1 && <Select aria-label="播放设备" disabled={busy} value={deviceId || undefined} placeholder="选择在线设备"
       options={devices.map(d => ({ value: d.id, label: d.name?.trim() || `桌面宠物 · ${d.id}` }))} onChange={setDeviceId} />}

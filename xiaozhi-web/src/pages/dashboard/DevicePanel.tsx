@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Button, Select, Slider, Space, Tag } from 'antd';
 import request from '../../api/request';
+import { startPolling } from '../../utils/polling';
 import './device-panel.css';
 import MotorCalibration, { type CalibrationState } from './MotorCalibration';
 import BalanceTuning from './BalanceTuning';
@@ -38,58 +39,68 @@ export default function DevicePanel() {
   const [localExpression,setLocalExpression]=useState<string|null>(null);
   const generation=useRef(0);
   const inflight=useRef(false);
+  const readController=useRef<AbortController|null>(null);
   const controlling=useRef(false);
   const snapshot=useRef<Snapshot|null>(null);
   const refreshQueued=useRef(false);
   const facePreviewUntil=useRef(0);
   const pollNow=useRef<(()=>void)|null>(null);
-  const load=useCallback(async()=>{
-    if(document.hidden)return;
+  const load=useCallback(async(signal?:AbortSignal)=>{
+    if(document.hidden || signal?.aborted)return;
     if(inflight.current || controlling.current){refreshQueued.current=true;return;}
     inflight.current=true;
     setRefreshing(true);
     const token=generation.current;
+    const controller=new AbortController();
+    readController.current=controller;
+    const abort=()=>controller.abort();
+    signal?.addEventListener('abort',abort,{once:true});
+    const current=()=>token===generation.current && readController.current===controller && !controller.signal.aborted && !document.hidden;
     try {
-      const res=await request.get('/devices/panel',{params:device?{deviceId:device}:{}});
-      if(token!==generation.current)return;
+      const res=await request.get('/devices/panel',{params:device?{deviceId:device}:{},signal:controller.signal});
+      if(!current())return;
       if(!Array.isArray(res.data?.devices) || res.data.selected === undefined)throw new Error('设备状态格式不完整，请刷新核实');
       if(snapshot.current && snapshot.current.deviceId!==res.data.selected?.deviceId){
         setEye(null);setMouth(null);setLocalExpression(null);facePreviewUntil.current=0;
       }
       snapshot.current=res.data.selected;
-      setDevices(res.data.devices); setState(res.data.selected); setError('');setNeedsRefresh(false);
+      setDevices(res.data.devices);setState(res.data.selected);setError('');setNeedsRefresh(false);
       if(device && !res.data.devices.includes(device))setDevice('');
-    } catch(e) {if(token===generation.current)setError(e instanceof Error?e.message:'状态读取失败');}
-    finally {inflight.current=false;setRefreshing(false);}
+    } catch(e) {
+      if(current())setError(e instanceof Error?e.message:'状态读取失败');
+      return false;
+    } finally {
+      signal?.removeEventListener('abort',abort);
+      if(readController.current===controller){
+        readController.current=null;inflight.current=false;
+        if(token===generation.current)setRefreshing(false);
+      }
+    }
   },[device]);
   useEffect(()=>{
-    ++generation.current;snapshot.current=null;facePreviewUntil.current=0;setState(null);setNeedsRefresh(true);setError('');setFeedback('');setVolume(null);setBrightness(null);setEye(null);setMouth(null);setLocalExpression(null);
-    let cancelled=false;
-    let pollCycle=0;
-    let timer: number | undefined;
-    const poll=async()=>{
-      if(cancelled || document.hidden)return;
-      const cycle=pollCycle;
+    ++generation.current;
+    readController.current?.abort();readController.current=null;inflight.current=false;
+    snapshot.current=null;facePreviewUntil.current=0;setState(null);setNeedsRefresh(true);setError('');setFeedback('');setVolume(null);setBrightness(null);setEye(null);setMouth(null);setLocalExpression(null);
+    const polling=startPolling(async signal=>{
       refreshQueued.current=false;
-      await load();
-      if(cancelled || document.hidden || cycle!==pollCycle)return;
+      return load(signal);
+    },{interval:()=>{
       const motion=snapshot.current?.chassis;
       const executing=motion?.busy===true || (motion?.motionValid===true && ['rising','settling_before','rotating','settling_after'].includes(motion.phase||''));
-      const fast=controlling.current || inflight.current || refreshQueued.current || executing || Date.now()<facePreviewUntil.current || snapshot.current?.deviceState===6;
-      // Follow reported expressions; local color/pose drafts render without a request.
-      timer=window.setTimeout(()=>void poll(),fast?1000:2000);
-    };
-    pollNow.current=()=>{
-      ++pollCycle;window.clearTimeout(timer);
-      if(!document.hidden)void poll();
-    };
+      const fast=controlling.current || refreshQueued.current || executing || Date.now()<facePreviewUntil.current || snapshot.current?.deviceState===6;
+      return fast?1000:2000;
+    },maxInterval:15000});
+    pollNow.current=polling.refresh;
     const visible=()=>{
-      ++pollCycle;window.clearTimeout(timer);setNeedsRefresh(true);
-      if(!document.hidden)void poll();
+      setNeedsRefresh(true);
+      if(document.hidden)readController.current?.abort();
     };
-    void poll();
     document.addEventListener('visibilitychange',visible);
-    return()=>{cancelled=true;++generation.current;pollNow.current=null;window.clearTimeout(timer);document.removeEventListener('visibilitychange',visible);};
+    return()=>{
+      ++generation.current;pollNow.current=null;polling.stop();
+      readController.current?.abort();readController.current=null;inflight.current=false;
+      document.removeEventListener('visibilitychange',visible);
+    };
   },[load]);
   const control=async(action:string,values:Record<string,unknown>)=>{
     if(!state || !state.online || error || needsRefresh || controlling.current){
@@ -101,6 +112,7 @@ export default function DevicePanel() {
     controlling.current=true;setRequestBusy(true);setVerified(false);setFeedback('正在发送，等待设备确认…');
     // Ignore any polling response started before this control and its verified read-back.
     const token=++generation.current;
+    readController.current?.abort();setRefreshing(false);
     try{
       const res=await request.post('/devices/panel',{deviceId:state.deviceId,action,...values});
       if(token!==generation.current)return;
@@ -110,7 +122,7 @@ export default function DevicePanel() {
       if(action==='volume')setVolume(null);if(action==='brightness')setBrightness(null);if(action==='colors'){setEye(null);setMouth(null);}
       if(action==='expression'){setLocalExpression(null);facePreviewUntil.current=Date.now()+9000;}
     }catch(e){if(token===generation.current){setVolume(null);setBrightness(null);setFeedback(e instanceof Error?e.message:'执行结果未知，请刷新核实');setError('请刷新设备状态后再操作');}}
-    finally{controlling.current=false;setRequestBusy(false);if(token===generation.current)pollNow.current?.();}
+    finally{controlling.current=false;if(token===generation.current){setRequestBusy(false);pollNow.current?.();}}
   };
   // Background polling keeps the last valid snapshot usable while it updates.
   const fresh=!!state&&!error&&!needsRefresh;

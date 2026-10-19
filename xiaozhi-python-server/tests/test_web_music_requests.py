@@ -66,7 +66,7 @@ class WebMusicRequestTests(unittest.IsolatedAsyncioTestCase):
 
         with patch('core.music.conversation.pause_for_chat', side_effect=pause_audio), \
                 patch('core.music.conversation.say', side_effect=finish_confirmation), \
-                patch('core.handle.reportHandle.enqueue_asr_report', Mock()):
+                patch('core.reporting.chat_reports.enqueue_asr_report', Mock()):
             await self.api.execute(self.record, text, '')
 
     async def test_playing_own_song_releases_previous_request_before_task_exits(self):
@@ -119,7 +119,7 @@ class WebMusicRequestTests(unittest.IsolatedAsyncioTestCase):
         send_stt = AsyncMock()
         with patch('core.music.conversation.pause_for_chat', side_effect=pause_audio), \
                 patch('core.music.pause_for_chat', side_effect=pause_audio), \
-                patch('core.handle.reportHandle.enqueue_tts_report', Mock()) as report_reply, \
+                patch('core.reporting.chat_reports.enqueue_tts_report', Mock()) as report_reply, \
                 patch.dict('sys.modules', {'core.handle.sendAudioHandle': SimpleNamespace(send_stt_message=send_stt)}):
             await self.api.execute(self.record, text, '')
         self.assertEqual(self.record.status, 'server_done')

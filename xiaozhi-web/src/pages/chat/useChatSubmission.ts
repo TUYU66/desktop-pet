@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getChatRequestStatus, sendMessage } from '../../api/chat';
 import type { ChatRequestReceipt, ChatRequestStatus } from '../../api/chat';
 import { ApiError } from '../../api/request';
+import { startPolling } from '../../utils/polling';
 import { missingChatEndpoint } from './useChatHistory';
 import { isChatControl, submissionBlocks } from './chatControl';
 export { submissionBlocks } from './chatControl';
@@ -38,7 +39,7 @@ export function useChatSubmission(wakeWord = '') {
   const context = useRef<Context | null>(null);
   const alive = useRef(false);
   const postingLock = useRef(false);
-  const check = useRef<() => Promise<void>>(async () => {});
+  const check = useRef<(signal?: AbortSignal) => Promise<boolean | void>>(async () => {});
 
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const publish = useCallback((ctx: Context, changes: Partial<Submission>) => {
@@ -103,32 +104,35 @@ export function useChatSubmission(wakeWord = '') {
     const controller = new AbortController();
     let busy = false;
     const current = () => alive.current && context.current === ctx && !controller.signal.aborted;
-    check.current = async () => {
+    check.current = async signal => {
       if (!current() || busy || ctx.value.posting || !ctx.value.tracking || document.hidden) return;
       busy = true;
+      const readSignal = signal ? AbortSignal.any([controller.signal, signal]) : controller.signal;
       try {
-        const result = await getChatRequestStatus(ctx.value.requestId, controller.signal);
-        if (current()) applyReceipt(ctx, receipt(result.data, ctx.value.requestId));
+        const result = await getChatRequestStatus(ctx.value.requestId, readSignal);
+        if (current() && !readSignal.aborted) applyReceipt(ctx, receipt(result.data, ctx.value.requestId));
       } catch (error) {
-        if (!current()) return;
+        if (!current() || readSignal.aborted) return;
         const code = error instanceof ApiError ? Number(error.code) : NaN;
         const absent = code === 404 || code === 410;
         publish(ctx, { status: 'unknown', stopPolling: absent || missingChatEndpoint(error),
           message: missingChatEndpoint(error) ? '当前服务尚未提供回执查询，结果待核实；不会自动重发。'
             : error instanceof Error ? error.message : '处理状态查询失败，结果待核实；不会自动重发。' });
+        return false;
       } finally { busy = false; }
     };
-    const poll = () => {
-      if (ctx.value.stopPolling || !ctx.value.tracking || ctx.value.posting || document.hidden) return;
+    const polling = startPolling(async signal => {
       if (Date.now() - ctx.value.started >= 180000) {
         publish(ctx, { status: 'unknown', stopPolling: true, message: '跟踪已超时，请核实机器人和聊天记录；不会自动重发。' });
-      } else { void check.current(); }
-    };
-    const visible = () => { if (!document.hidden) poll(); };
-    poll();
-    const timer = window.setInterval(poll, 2000);
-    document.addEventListener('visibilitychange', visible);
-    return () => { controller.abort(); window.clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+        return;
+      }
+      return check.current(signal);
+    }, {
+      interval: 2000, maxInterval: 15000,
+      enabled: () => current() && !ctx.value.stopPolling && ctx.value.tracking && !ctx.value.posting,
+    });
+    return () => { controller.abort(); polling.stop(); };
+
   }, [record?.requestId, record?.posting, record?.tracking, record?.stopPolling, applyReceipt, publish]);
 
   const checkStatus = useCallback(() => check.current(), []);

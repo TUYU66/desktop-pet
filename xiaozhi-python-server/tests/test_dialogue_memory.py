@@ -2,7 +2,7 @@
 import unittest
 
 from core.utils.dialogue import Dialogue, Message, saved_memory_recall_answer
-from core.providers.memory.mem_local_short.mem_local_short import format_memories
+from legacy_memory.mem_local_short import format_memories
 
 
 class DialogueMemoryTests(unittest.TestCase):

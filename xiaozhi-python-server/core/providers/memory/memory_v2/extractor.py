@@ -1,12 +1,6 @@
 """第一阶段只判断是否值得长期处理，并生成宽松检索线索。"""
 
-from .models import (
-    JsonModel,
-    ProtocolError,
-    RetrievalIntent,
-    UserTurn,
-    text,
-)
+from .models import JsonModel, ProtocolError, RetrievalIntent, UserTurn, text
 
 
 PROMPT = """
@@ -210,19 +204,9 @@ time
 """
 
 
-async def extract(
-    model: JsonModel,
-    turn: UserTurn,
-) -> tuple[RetrievalIntent, ...]:
+async def extract(model: JsonModel, turn: UserTurn) -> tuple[RetrievalIntent, ...]:
 
-    answer = await model.ask(
-        "retrieval_intent",
-        PROMPT,
-        {
-            "latestUser": turn.latest_user,
-        },
-        1400,
-    )
+    answer = await model.ask("retrieval_intent", PROMPT, {"latestUser": turn.latest_user}, 1400)
 
     items = answer.get("items")
 
@@ -234,42 +218,17 @@ async def extract(
     for item in items:
 
         if not isinstance(item, dict):
-            raise ProtocolError(
-                "retrieval_item_invalid"
-            )
+            raise ProtocolError("retrieval_item_invalid")
 
-        words = item.get(
-            "retrievalKeywords"
-        )
+        words = item.get("retrievalKeywords")
 
-        if (
-            not isinstance(words, list)
-            or len(words) > 8
-        ):
-            raise ProtocolError(
-                "retrieval_keywords_invalid"
-            )
+        if not isinstance(words, list) or len(words) > 8:
+            raise ProtocolError("retrieval_keywords_invalid")
 
-        keywords = tuple(
-            text(
-                word,
-                "retrieval_keyword_invalid",
-                60,
-            )
-            for word in words
-        )
+        keywords = tuple(text(word, "retrieval_keyword_invalid", 60) for word in words)
 
-        query = text(
-            item.get("retrievalQuery"),
-            "retrieval_query_invalid",
-            500,
-        )
+        query = text(item.get("retrievalQuery"), "retrieval_query_invalid", 500)
 
-        result.append(
-            RetrievalIntent(
-                keywords,
-                query,
-            )
-        )
+        result.append(RetrievalIntent(keywords, query))
 
     return tuple(result)

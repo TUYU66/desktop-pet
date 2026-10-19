@@ -4,6 +4,7 @@ import uuid
 import time
 import queue
 import asyncio
+import os
 import threading
 import traceback
 import websockets
@@ -23,6 +24,7 @@ from config.logger import setup_logging, build_module_string, create_connection_
 from config.manage_api_client import report_chat_title
 from core.utils.prompt_manager import PromptManager
 from core.conversation.engine import ConversationEngine
+from core.reporting.chat_reports import get_report_session_id, process_report
 
 TAG = __name__
 
@@ -200,7 +202,7 @@ class ConnectionHandler(ConversationEngine):
     async def _save_and_close(self, ws):
         """完成会话标题上报并关闭连接；长期记忆已在每轮对话后保存。"""
         try:
-            java_session_id = self._get_report_session_id()
+            java_session_id = get_report_session_id(self)
             if java_session_id:
                 def generate_title_task():
                     try:
@@ -245,11 +247,15 @@ class ConnectionHandler(ConversationEngine):
         if isinstance(message, str):
             await handleTextMessage(self, message)
         elif isinstance(message, bytes):
+            from core.utils.voice_diagnostics import count
+            count(self, 'rx')
             if self.vad is None or self.asr is None:
+                count(self, 'unready')
                 return
             try:
                 self.asr_audio_queue.put_nowait(message)
             except queue.Full:
+                count(self, 'overflow')
                 # Do not block WebSocket control/abort messages behind audio backlog.
                 while True:
                     try: self.asr_audio_queue.get_nowait()
@@ -492,7 +498,7 @@ class ConnectionHandler(ConversationEngine):
                 try:
                     if self.executor is None:
                         continue
-                    self.executor.submit(self._process_report, *item)
+                    self.executor.submit(process_report, self, *item)
                 except Exception as e:
                     self.logger.bind(tag=TAG).error(f"聊天记录上报线程异常: {e}")
             except queue.Empty:
@@ -501,54 +507,6 @@ class ConnectionHandler(ConversationEngine):
                 self.logger.bind(tag=TAG).error(f"聊天记录上报工作线程异常: {e}")
 
         self.logger.bind(tag=TAG).info("聊天记录上报线程已退出")
-
-    def _get_report_session_id(self):
-        """获取 Java 端的角色 session ID，确保前后端看到同一条聊天记录"""
-        try:
-            role_id = self.config.get("activeRole", "default")
-            role_name = ""
-            roles_raw = self.config.get("roles", "[]")
-            try:
-                roles = json.loads(roles_raw) if isinstance(roles_raw, str) else roles_raw if isinstance(roles_raw, list) else []
-                for r in roles:
-                    if r.get("id") == role_id:
-                        role_name = r.get("name", role_name)
-                        break
-            except Exception:
-                pass
-            import httpx
-            resp = httpx.get(
-                f"http://localhost:8000/xiaozhi/api/chat/session-by-role/{role_id}",
-                params={"roleName": role_name},
-                headers={"Service-Key": "xiaozhi-python"},
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                data = resp.json().get("data", {})
-                if data and data.get("sessionId"):
-                    return data["sessionId"]
-        except Exception as e:
-            self.logger.bind(tag=TAG).debug(f"获取Java session失败，使用本地ID: {e}")
-        return self.session_id
-
-    def _process_report(self, type, text, audio_data, report_time):
-        """处理上报任务（同步HTTP POST，不依赖事件循环）"""
-        try:
-            import httpx
-            session_id = self._get_report_session_id()
-            url = "http://localhost:8000/xiaozhi/api/chat/report"
-            payload = {
-                "sessionId": session_id,
-                "chatType": str(type),
-                "content": text,
-                "macAddress": self.device_id or "unknown",
-                "reportTime": report_time,
-            }
-            resp = httpx.post(url, json=payload, headers={"Service-Key": "xiaozhi-python"}, timeout=10)
-            if resp.status_code != 200:
-                self.logger.bind(tag=TAG).error(f"上报失败: HTTP {resp.status_code}")
-        except Exception as e:
-            self.logger.bind(tag=TAG).error(f"上报处理异常: {e}")
 
     def clearSpeakStatus(self):
         self.client_is_speaking = False
@@ -683,6 +641,8 @@ class ConnectionHandler(ConversationEngine):
         try:
             while not self.stop_event.is_set():
                 last_activity_time = self.last_activity_time
+                from core.utils.voice_diagnostics import report
+                report(self)
                 from core.conversation.standby import supports_standby, maybe_idle_standby
                 if supports_standby(self):
                     now = time.time() * 1000

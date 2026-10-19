@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Select, Slider } from 'antd';
 import request from '../../api/request';
+import { startPolling } from '../../utils/polling';
 
 type VolumeSnapshot = {
   deviceId: string;
@@ -23,18 +24,19 @@ export default function VolumeControl() {
 
   useEffect(() => {
     let active = true;
-    const read = async () => {
+    const read = async (signal: AbortSignal) => {
       if (busyRef.current) return;
       const currentVersion = version.current;
       try {
-        const result = await request.get('/devices/panel', { params: device ? { deviceId: device } : {} });
-        if (!active || currentVersion !== version.current) return;
+        const result = await request.get('/devices/panel', { params: device ? { deviceId: device } : {}, signal });
+        if (!active || signal.aborted || currentVersion !== version.current) return;
         setDevices(result.data.devices || []);
         setSnapshot(result.data.selected || null);
         setError('');
         if (device && !result.data.devices?.includes(device)) setDevice('');
       } catch (cause) {
-        if (active && currentVersion === version.current) setError(cause instanceof Error ? cause.message : '设备状态读取失败');
+        if (active && !signal.aborted && currentVersion === version.current) setError(cause instanceof Error ? cause.message : '设备状态读取失败');
+        return false;
       } finally { if (active) setLoading(false); }
     };
     setLoading(true);
@@ -42,9 +44,8 @@ export default function VolumeControl() {
     setValue(null);
     setError('');
     setFeedback('');
-    void read();
-    const timer = window.setInterval(() => { if (!document.hidden) void read(); }, 6000);
-    return () => { active = false; window.clearInterval(timer); };
+    const polling = startPolling(read, { interval: 6000, maxInterval: 30000 });
+    return () => { active = false; polling.stop(); };
   }, [device, refreshKey]);
 
   const volume = snapshot?.hardware.audio_speaker?.volume;

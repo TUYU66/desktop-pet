@@ -103,6 +103,7 @@ public class UserController {
     @PutMapping("/config")
     public Result<?> saveConfig(@CurrentUser UserEntity user, @RequestBody Map<String, String> body) {
         if (user == null) return Result.error(401, "未登录");
+        body = new java.util.HashMap<>(body);
         if (body.containsKey("customWakeWord")) {
             String word = body.get("customWakeWord");
             if (word == null || (!word.isEmpty() && !word.matches("[\\u4e00-\\u9fff]{3,8}"))) {

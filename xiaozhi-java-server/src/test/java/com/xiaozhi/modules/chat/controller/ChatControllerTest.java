@@ -18,6 +18,7 @@ class ChatControllerTest {
                 ClientResponse.create(status).header("Content-Type", "application/json")
                         .body(body).build())).build();
         ReflectionTestUtils.setField(controller, "webClient", client);
+        ReflectionTestUtils.setField(controller, "deviceServiceKey", "test-private-device");
         ReflectionTestUtils.setField(controller, "pythonBaseUrl", "http://test.invalid");
         return controller;
     }

@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock, patch
 from test_memory import MODULE, WHEN, review
 from test_memory_management import ScriptedLlm, resolution
 from test_memory_policy import record
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.management import RESOLVE_PROMPT
-from core.providers.memory.mem_local_short.facts import numeric_quantity
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.management import RESOLVE_PROMPT
+from legacy_memory.facts import numeric_quantity
 
 
 def entry(subject, predicate, value, **extra):

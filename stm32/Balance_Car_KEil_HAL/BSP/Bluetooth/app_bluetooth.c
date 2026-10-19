@@ -1,4 +1,5 @@
 #include "app_bluetooth.h"
+#include "../ChassisLink/chassis_link.h"
 #include <stdlib.h>
 
 #define 	run_car     '1'//按键前 Before pressing the button
@@ -136,11 +137,34 @@ void Protocol(void)
     unsigned int i;
     enCarState requested = enSTOP;
     float kp, kd;
+    /* App mode request is a distinct, bounded frame; no PID or movement fields. */
+    if (length >= 8 && strncmp((const char *)ProtocolString, "$BC,", 4) == 0) {
+        char *end;
+        unsigned long identifier;
+        if ((ProtocolString[4] != '0' && ProtocolString[4] != '1') || ProtocolString[5] != ',' ||
+            ProtocolString[6] < '1' || ProtocolString[6] > '9') return;
+        identifier = strtoul((const char *)ProtocolString + 6, &end, 10);
+        if (identifier < 1 || identifier > 65535UL || *end != '#' || end[1] != 0) return;
+        ChassisLink_AppBluetoothRequest((unsigned int)identifier, ProtocolString[4] == '1');
+        return;
+    }
     /* Validate the fixed command header BEFORE changing any motor state. */
     if (length < 21 || ProtocolString[0] != '$' || ProtocolString[length-1] != '#') return;
     for (i = 2; i <= 12; i += 2) if (ProtocolString[i] != ',') return;
     if (ProtocolString[1] < '0' || ProtocolString[1] > '4' ||
         ProtocolString[3] < '0' || ProtocolString[3] > '2') return;
+    /* Read-only Android status query: $0,0,0,0,0,0,0,1,0,0#.
+     * Never refresh the movement watchdog or replace a held direction with STOP.
+     * Strictly validate the reserved frame before reporting actual permission. */
+    if (length == 21 && ProtocolString[15] == '1') {
+        char status[80];
+        for (i = 1; i <= 19; i += 2)
+            if (ProtocolString[i] != (i == 15 ? '1' : '0')) return;
+        for (i = 2; i <= 18; i += 2) if (ProtocolString[i] != ',') return;
+        ChassisLink_AppBluetoothStatus(status, sizeof(status));
+        UART5_Send_Char(status);
+        return;
+    }
     if (Chassis_BluetoothEnabled()) {
         switch (ProtocolString[1]) {
             case run_car: requested = enRUN; break;

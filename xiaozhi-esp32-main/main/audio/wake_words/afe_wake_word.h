@@ -36,6 +36,7 @@ public:
 
 private:
     srmodel_list_t *models_ = nullptr;
+    bool owns_models_ = false;
     const esp_afe_sr_iface_t* afe_iface_ = nullptr;
     esp_afe_sr_data_t* afe_data_ = nullptr;
     char* wakenet_model_ = NULL;

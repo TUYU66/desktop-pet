@@ -13,6 +13,7 @@ from core.api.music_handler import MusicHandler
 from core.api.netease_handler import NeteaseHandler
 from core.device.wake_word import WakeWordSync
 from core.api.reminder_handler import ReminderHandler
+from core.api.internal_auth import internal_auth
 
 TAG = __name__
 
@@ -55,11 +56,11 @@ class SimpleHttpServer:
     async def start(self):
         try:
             server_config = self.config["server"]
-            host = server_config.get("ip", "0.0.0.0")
+            host = server_config.get("http_ip", "127.0.0.1")
             port = int(server_config.get("http_port", 8003))
 
             if port:
-                app = web.Application()
+                app = web.Application(middlewares=[internal_auth])
                 app.add_routes(
                     [
                         # OTA 接口

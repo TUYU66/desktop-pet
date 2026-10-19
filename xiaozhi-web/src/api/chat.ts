@@ -64,8 +64,8 @@ export function createSession(roleId: string, roleName: string) {
   return request.post('/chat/new', { roleId, roleName });
 }
 
-export function getSessionByRole(roleId: string, roleName: string) {
-  return request.get(`/chat/session-by-role/${roleId}`, { params: { roleName } });
+export function getSessionByRole(roleId: string, roleName: string, signal?: AbortSignal) {
+  return request.get(`/chat/session-by-role/${roleId}`, { params: { roleName }, signal });
 }
 
 export function sendMessage(text: string, deviceId?: string, sessionId?: string, requestId?: string) {
@@ -77,6 +77,7 @@ export function clearMemory(roleId: string) {
 }
 
 export interface MemoryRecord {
+  requiresMigration?: boolean;
   id: number;
   roleId: string;
   category: string;

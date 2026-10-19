@@ -1,4 +1,5 @@
 """模型传输和诊断；不修复JSON、不重试语义、不加入第三次审查。"""
+
 import asyncio
 import json
 import re
@@ -7,7 +8,11 @@ from .models import ProtocolError
 
 def diagnostic_text(value):
     rendered = json.dumps(value, ensure_ascii=False, default=str)
-    return re.sub(r'(?i)((?:api[_-]?key|password|密码|验证码|密钥)\s*[=:：]\s*)[^\s,，;；"}]+', r'\1[REDACTED]', rendered)
+    return re.sub(
+        r'(?i)((?:api[_-]?key|password|密码|验证码|密钥)\s*[=:：]\s*)[^\s,，;；"}]+',
+        r"\1[REDACTED]",
+        rendered,
+    )
 
 
 class ModelRuntime:
@@ -20,7 +25,10 @@ class ModelRuntime:
             raise ProtocolError("model_input_budget_exceeded")
         self.log(stage + "_input", payload)
         method = self.llm.response_no_stream
-        if self.config.get("structured_output", "auto") != "text" and getattr(self.llm, "supports_json_object", False) is True:
+        if (
+            self.config.get("structured_output", "auto") != "text"
+            and getattr(self.llm, "supports_json_object", False) is True
+        ):
             method = self.llm.response_json
         raw = await asyncio.to_thread(method, prompt, encoded, max_tokens=tokens, temperature=0.1)
         self.log(stage + "_raw_output", raw)

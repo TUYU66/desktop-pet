@@ -1,4 +1,6 @@
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import PageDoodle from '../../components/PageDoodle';
+import { createPortal } from 'react-dom';
 import type { KeyboardEvent } from 'react';
 import { Alert, App, Button, DatePicker, Input, Modal, Space, Spin, Tag } from 'antd';
 import { CloseOutlined, DeleteOutlined, ReloadOutlined, RobotOutlined, SendOutlined, SettingOutlined, WifiOutlined } from '@ant-design/icons';
@@ -7,6 +9,7 @@ import dayjs from 'dayjs';
 import { deleteSession, getSessionByRole } from '../../api/chat';
 import { getBotConfig } from '../../api/user';
 import request from '../../api/request';
+import { startPolling } from '../../utils/polling';
 import useUnsavedChanges from '../../hooks/useUnsavedChanges';
 import { ChatAvatar } from '../../components/ChatAvatar';
 import { chatDate, chatDateLabel, chatTime, chatTimeLabel } from './chatTime';
@@ -22,6 +25,14 @@ const errorText = (error: unknown, fallback: string) => error instanceof Error ?
 
 export default function ChatRoom() {
   const { message } = App.useApp();
+  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
+  useLayoutEffect(() => {
+    const desktop = window.matchMedia('(min-width: 761px)');
+    const syncHeader = () => setHeaderTarget(desktop.matches ? document.getElementById('chat-header-slot') : null);
+    syncHeader();
+    desktop.addEventListener('change', syncHeader);
+    return () => desktop.removeEventListener('change', syncHeader);
+  }, []);
   const [conversation, setConversation] = useState<Conversation>({ session: null, name: '桌面宠物', userAvatar: '', botAvatar: '' });
   const [configError, setConfigError] = useState('');
   const [configLoading, setConfigLoading] = useState(false);
@@ -42,7 +53,8 @@ export default function ChatRoom() {
   const currentSession = useRef(conversation.session);
   currentSession.current = conversation.session;
   const configSequence = useRef(0);
-  const configPromise = useRef<Promise<void> | null>(null);
+  const configPromise = useRef<Promise<boolean | void> | null>(null);
+  const configSignal = useRef<AbortSignal | undefined>(undefined);
   const draftRevision = useRef(0);
   const draftText = useRef(inputText);
   draftText.current = inputText;
@@ -104,24 +116,25 @@ export default function ChatRoom() {
   }, [activeRequest, message, requestToastKey, restoreDraft, submission.checkStatus, submission.finishChecking]);
   useEffect(() => () => message.destroy(requestToastKey), [message, requestToastKey]);
 
-  const refreshConfig = useCallback(async (force = false) => {
-    if (configPromise.current) {
-      if (!force) return configPromise.current;
+  const refreshConfig = useCallback(async (force = false, signal?: AbortSignal) => {
+    while (configPromise.current) {
+      if (!force && !configSignal.current?.aborted) return configPromise.current;
       ++configSequence.current;
       await configPromise.current;
     }
+    if (!alive.current || signal?.aborted) return;
     const sequence = ++configSequence.current;
-    const current = () => alive.current && sequence === configSequence.current;
+    const current = () => alive.current && sequence === configSequence.current && !signal?.aborted;
     if (current()) setConfigLoading(true);
     const pending = (async () => {
       try {
-        const result = await getBotConfig();
+        const result = await getBotConfig(signal);
         const cfg = result.data || {};
         const parsed = typeof cfg.roles === 'string' ? JSON.parse(cfg.roles) : cfg.roles;
         const roles: RoleItem[] = Array.isArray(parsed) ? parsed : [];
         const role = roles.find(item => item.id === cfg.activeRole) || roles[0];
         const name = role?.name?.trim() || '桌面宠物';
-        const sessionResult = await getSessionByRole(role?.id || 'default', name);
+        const sessionResult = await getSessionByRole(role?.id || 'default', name, signal);
         const session = sessionResult.data?.sessionId;
         if (typeof session !== 'string' || !session) throw new Error('无法读取当前对话');
         if (!current()) return;
@@ -131,49 +144,41 @@ export default function ChatRoom() {
         setConfigError('');
       } catch (error) {
         if (current()) setConfigError(errorText(error, '无法加载对话，请检查管理服务'));
+        return false;
       } finally { if (current()) setConfigLoading(false); }
     })();
     configPromise.current = pending;
-    await pending;
-    if (configPromise.current === pending) configPromise.current = null;
+    configSignal.current = signal;
+    const result = await pending;
+    if (configPromise.current === pending) { configPromise.current = null; configSignal.current = undefined; }
+    return result;
   }, []);
 
   useEffect(() => {
-    void refreshConfig();
-    const timer = window.setInterval(() => { if (!document.hidden) void refreshConfig(); }, 30000);
-    const visible = () => { if (!document.hidden) void refreshConfig(); };
-    document.addEventListener('visibilitychange', visible);
-    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+    const polling = startPolling(signal => refreshConfig(false, signal), { interval: 30000, maxInterval: 120000 });
+    return () => polling.stop();
   }, [refreshConfig]);
 
   useEffect(() => {
-    const controller = new AbortController();
-    let busy = false;
-    const refresh = async () => {
-      if (busy || document.hidden || controller.signal.aborted) return;
-      busy = true;
-      try {
-        const [device, sessions] = await Promise.allSettled([
-          request.get<unknown, { data?: { macAddress?: string } }>('/devices/info', { signal: controller.signal }),
-          request.get<unknown, { data?: string[] }>('/chat/active-sessions', { signal: controller.signal }),
-        ]);
-        if (controller.signal.aborted) return;
-        if (device.status === 'fulfilled') setDeviceId(typeof device.value.data?.macAddress === 'string' ? device.value.data.macAddress : '');
-        if (sessions.status === 'fulfilled' && Array.isArray(sessions.value.data)
-          && sessions.value.data.every(value => typeof value === 'string')) {
-          setActiveSessions(new Set(sessions.value.data));
-          setConnectionError('');
-        } else {
-          setActiveSessions(null);
-          setConnectionError('连接状态暂时无法核实，发送时由设备服务确认。');
-        }
-      } finally { busy = false; }
+    const refresh = async (signal: AbortSignal) => {
+      const [device, sessions] = await Promise.allSettled([
+        request.get<unknown, { data?: { macAddress?: string } }>('/devices/info', { signal }),
+        request.get<unknown, { data?: string[] }>('/chat/active-sessions', { signal }),
+      ]);
+      if (signal.aborted) return;
+      if (device.status === 'fulfilled') setDeviceId(typeof device.value.data?.macAddress === 'string' ? device.value.data.macAddress : '');
+      if (sessions.status === 'fulfilled' && Array.isArray(sessions.value.data)
+        && sessions.value.data.every(value => typeof value === 'string')) {
+        setActiveSessions(new Set(sessions.value.data));
+        setConnectionError('');
+      } else {
+        setActiveSessions(null);
+        setConnectionError('连接状态暂时无法核实，发送时由设备服务确认。');
+      }
+      return sessions.status === 'fulfilled' && Array.isArray(sessions.value.data) && device.status === 'fulfilled';
     };
-    const visible = () => { if (!document.hidden) void refresh(); };
-    void refresh();
-    const timer = window.setInterval(() => { void refresh(); }, 5000);
-    document.addEventListener('visibilitychange', visible);
-    return () => { controller.abort(); window.clearInterval(timer); document.removeEventListener('visibilitychange', visible); };
+    const polling = startPolling(refresh, { interval: 5000, maxInterval: 30000 });
+    return () => polling.stop();
   }, []);
 
   const dateSet = useMemo(() => new Set(dates.dates), [dates.dates]);
@@ -294,13 +299,15 @@ export default function ChatRoom() {
     </Fragment>;
   }), [visibleMessages, conversation.name, conversation.userAvatar, conversation.botAvatar]);
 
-  return <div className='chat-workspace qq-chat single-chat'>
-    <section className='chat-panel'>
-      <div className='chat-heading'><ChatAvatar value={conversation.botAvatar} robot size={36} />
+  const chatHeading = <div className='chat-heading'><ChatAvatar value={conversation.botAvatar} robot size={36} />
         <div className='chat-persona'><h2 title={conversation.name}>{conversation.name}</h2><p>在网页输入，由桌面宠物出声回复</p></div>
+        <PageDoodle kind="chat" />
         <Tag color={activeSessions?.has(conversation.session || '') ? 'success' : 'default'} icon={<WifiOutlined />}>{connectionLabel}</Tag>
         <Link className='chat-avatar-link' to='/settings' aria-label='设置对话头像'><SettingOutlined /> 头像设置</Link>
-      </div>
+      </div>;
+  return <>{headerTarget && createPortal(chatHeading, headerTarget)}<div className={`chat-workspace qq-chat single-chat${headerTarget ? ' has-integrated-header' : ''}`}>
+    <section className='chat-panel'>
+      {!headerTarget && chatHeading}
       <div className='chat-date-toolbar'>
         <DatePicker className='chat-date-picker' aria-label='按北京时间查询聊天记录' inputReadOnly allowClear format='YYYY-MM-DD'
           value={selectedDate ? dayjs(selectedDate) : null} placeholder='全部日期'
@@ -360,5 +367,5 @@ export default function ChatRoom() {
             disabled={!inputText.trim() || sendBlocked || deleting}>发送消息</Button></div>
       </div> : <div className='history-notice'><span>正在连接当前对话。</span><Button type='link' loading={configLoading} onClick={() => void refreshConfig(true)}>重新加载</Button></div>}
     </section>
-  </div>;
+  </div></>;
 }

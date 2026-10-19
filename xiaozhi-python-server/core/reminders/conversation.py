@@ -36,6 +36,8 @@ async def respond(conn,text):
 
 async def _respond(conn,text):
     from core.reminders.reply import reply_candidate
+    from core.reminders.reply import resolve_all_snooze
+    group_snooze = resolve_all_snooze(conn,text,[],0) is not None
     conn.schedule_operation_complete=False
     from core.reminders.routing import read_query
     query=read_query(text)
@@ -47,13 +49,13 @@ async def _respond(conn,text):
     correction=rejected_field(getattr(conn,'schedule_pending',None) or {},text)
     if UNSAFE.search(text) and (EDIT.search(text) or CORRECTION.search(text)): return None
     # A newer explicit edit owns its field answers, while the batch stays saved.
-    if getattr(conn,'schedule_edit_pending',None):
+    if getattr(conn,'schedule_edit_pending',None) and not group_snooze:
         edit_answer=await respond_edit(conn,text)
         if edit_answer is not None: return edit_answer
     if is_batch_pending(conn):
         batch_answer=await batch_handle(conn,text)
         if batch_answer is not None: return batch_answer
-    edit_answer=None if correction else await respond_edit(conn,text)
+    edit_answer=None if correction or group_snooze else await respond_edit(conn,text)
     if edit_answer is not None: return edit_answer
     if not is_batch_pending(conn):
         batch_answer=await batch_handle(conn,text)
@@ -100,17 +102,17 @@ async def _respond(conn,text):
                 and not re.fullmatch(r'第[一二三四五六七八九十0-9]+条?',text.strip(' 。！!，,'))):
             action=None # A fresh acknowledgement can select a group, not only the old choice.
         semantic_id=None
-        from core.reminders.reply import CONFIRMABLE, resolve_all, confirm_group, remember, recent
+        from core.reminders.reply import CONFIRMABLE, resolve_all, confirm_group, remember, recent, resolve_all_snooze
         eligible=[x for x in snapshot['items'] if x['status'] in CONFIRMABLE]
-        group=resolve_all(conn,text,eligible,snapshot.get('unansweredCount',len(eligible)))
-        if group and action in (None,'confirm'):
+        group=resolve_all_snooze(conn,text,eligible,snapshot.get('unansweredCount',len(eligible))) or resolve_all(conn,text,eligible,snapshot.get('unansweredCount',len(eligible)))
+        if group and action in (None,'confirm','snooze'):
             if group['action']=='ambiguous':
                 return '我没能把你说的这几条和刚才的提醒对应上。说一下提醒的事情，我就帮你一起确认。'
             ids=set(group['targetIds'])
             if not ids: return '刚才这些提醒已经没有待确认的了。'
-            return await confirm_group(conn,device,[x for x in eligible if x['id'] in ids])
+            return await confirm_group(conn,device,[x for x in eligible if x['id'] in ids],action=group['action'])
         if action is None and text.strip('。！!，, ') in ('收到','知道了','我知道了','已收到','确认收到','收到提醒了'):
-            eligible=[x for x in snapshot['items'] if x['status'] in ('awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')]
+            eligible=[x for x in snapshot['items'] if x['status'] in ('dispatching','awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')]
             context=recent(conn)
             addressed=eligible
             if context and context['total']==1 and len(context['items'])==1:
@@ -125,7 +127,7 @@ async def _respond(conn,text):
             if len(addressed)==1: action='confirm'; semantic_id=addressed[0]['id']
         if action is None and (expects_reply(conn) or reply_candidate(conn,text) or re.search(r'收到|知道了|好了|关掉吧|关闭提醒',text)):
             from core.reminders.intent import classify
-            eligible=[x for x in snapshot['items'] if x['status'] in ('awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')]
+            eligible=[x for x in snapshot['items'] if x['status'] in ('dispatching','awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')]
             try:
                 intent=await classify(conn,text,eligible,total=snapshot.get('unansweredCount',len(eligible)))
             except Exception as exc:
@@ -135,8 +137,12 @@ async def _respond(conn,text):
                 conn.reminder_response_until=time.monotonic()+90
                 return '你指的是哪一条提醒？请带上提醒的事情再说一次。'
             if intent and intent['action'] in ('confirm','snooze'):
-                if intent['action']=='confirm' and intent.get('targetIds'):
+                if intent.get('targetIds'):
                     ids=set(intent['targetIds'])
+                    if intent['action']=='snooze':
+                        at,_,question=parse_time(text,now)
+                        if question: return question
+                        return await confirm_group(conn,device,[x for x in eligible if x['id'] in ids],action='snooze',trigger_at=at)
                     return await confirm_group(conn,device,[x for x in eligible if x['id'] in ids])
                 action=intent['action']; semantic_id=intent['targetId']
         if action is None:
@@ -240,7 +246,7 @@ async def _respond(conn,text):
         named=[x for x in candidates if x['title'] in combined]
         if named: candidates=named
         elif not plan_scope and action in ('confirm','snooze'):
-            candidates=[x for x in candidates if x['status'] in ('awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')]
+            candidates=[x for x in candidates if x['status'] in ('dispatching','awaiting_confirmation','retry_pending','delivery_unknown','missed','expired')]
         selected=None
         if pending and pending.get('choices'):
             m=re.search(r'第([一二三四五六七八九十0-9]+)',text)

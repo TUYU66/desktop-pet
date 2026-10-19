@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from core.api.reminder_handler import ReminderHandler
 
 
-def request(body=None,remote="127.0.0.1",key="xiaozhi-reminders"):
+def request(body=None,remote="127.0.0.1",key="test-reminder-private"):
     return NS(remote=remote,headers={"Service-Key":key},json=AsyncMock(return_value=body))
 
 
@@ -24,11 +24,11 @@ def connection():
 
 class ReminderHandlerTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.env=patch.dict("os.environ",{"XIAOZHI_REMINDER_SERVICE_KEY":""}); self.env.start(); self.addCleanup(self.env.stop)
+        self.env=patch.dict("os.environ",{"XIAOZHI_REMINDER_SERVICE_KEY":"test-reminder-private"}); self.env.start(); self.addCleanup(self.env.stop)
         self.conn=connection(); self.api=ReminderHandler(NS(device_handlers={"target":self.conn}))
 
-    async def test_default_service_key_requires_loopback(self):
-        response=await self.api.handle_announce(request({},remote="192.168.1.5"))
+    async def test_private_service_key_required_on_every_address(self):
+        response=await self.api.handle_announce(request({},remote="192.168.1.5",key="xiaozhi-reminders"))
         self.assertEqual(401,response.status)
         self.assertTrue(self.api.authorized(request(remote="::1")))
         self.assertTrue(self.api.authorized(request(remote="::ffff:127.0.0.1")))

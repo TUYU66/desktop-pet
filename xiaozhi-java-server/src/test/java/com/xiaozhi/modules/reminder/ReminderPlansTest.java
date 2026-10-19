@@ -36,6 +36,6 @@ class ReminderPlansTest {
     @Test void wakingDoesNotConfirmAndIsBoundToAttempt() {
         var jdbc=mock(JdbcTemplate.class); var store=new ReminderStore(jdbc);
         store.listening(7,"id","attempt",2000);
-        verify(jdbc).update(contains("attempt_id=? AND task_id IS NULL AND status='awaiting_confirmation'"),eq(32000L),eq("id"),eq(7L),eq("attempt"),eq(2000L),eq(32000L));
+        verify(jdbc).update(contains("attempt_id=? AND task_id IS NULL AND status='awaiting_confirmation'"),eq(12000L),eq("id"),eq(7L),eq("attempt"),eq(2000L),eq(12000L));
     }
 }

@@ -11,6 +11,27 @@ from core.reminders.conversation import respond
 
 
 class GroupReplyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_all_five_minute_snoozes_save_each_item_and_verify_receipts(self):
+        self.commands.side_effect=lambda device,body: dict(id=body['id'],status='scheduled',version=body['version']+1,dueAt=301000)
+        for text in ('两条都延后五分钟','全部延后5分钟','都晚点再提醒'):
+            with self.subTest(text=text):
+                self.commands.reset_mock()
+                remember(self.conn,self.items)
+                answer=await respond(self.conn,text)
+                self.assertIn('都延后五分钟',answer)
+                self.assertEqual({'parcel','water'},{c.args[1]['id'] for c in self.commands.await_args_list})
+                self.assertTrue(all(c.args[1]['action']=='snooze' and c.args[1]['seconds']==300 for c in self.commands.await_args_list))
+
+    async def test_group_snooze_never_reports_all_success_when_one_receipt_is_missing(self):
+        def receipt(device,body):
+            return dict(id=body['id'],status='scheduled',version=body['version']+1,dueAt=301000) if body['id']=='parcel' else {}
+        self.commands.side_effect=receipt
+        remember(self.conn,self.items)
+        answer=await respond(self.conn,'两条都延后五分钟')
+        self.assertNotIn('都延后五分钟',answer)
+        self.assertIn('喝水',answer)
+        self.assertIn('还没确认',answer)
+
     def setUp(self):
         self.conn=NS(headers={'device-id':'target'},session_id='session',logger=Mock())
         self.items=[dict(id='parcel',title='拿快递',status='retry_pending',version=4),
@@ -115,7 +136,7 @@ class GroupReplyTests(unittest.IsolatedAsyncioTestCase):
     async def test_model_cannot_return_unknown_duplicate_or_conflicting_ids(self):
         self.conn.llm=Mock()
         for ids,target,action in [(['parcel','foreign'],None,'confirm'),(['parcel','parcel'],None,'confirm'),
-                                  (['parcel','water'],'parcel','confirm'),(['parcel','water'],None,'snooze')]:
+                                  (['parcel','water'],'parcel','confirm')]:
             self.conn.llm.response_json.return_value=dict(action=action,targetId=target,targetIds=ids)
             with self.assertRaises(ValueError): await classify(self.conn,'都看到了',self.items)
         self.commands.assert_not_awaited()

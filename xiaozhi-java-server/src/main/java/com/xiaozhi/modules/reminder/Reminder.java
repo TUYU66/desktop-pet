@@ -5,7 +5,13 @@ public record Reminder(String id, long userId, String deviceId, String title, St
                        long dueAt, long nextAttemptAt, long expiresAt, long version,
                        String attemptId, String lastError, long createdAt, long updatedAt, long initialSeconds,
                        String planId, int deliveryCount, long ackDeadline, long requestedAt,
-                       String taskId, long originalDueAt, long scheduledAt) {
+                       String taskId, long originalDueAt, long scheduledAt, long roundStartedAt) {
+    public Reminder(String id,long userId,String deviceId,String title,String status,long dueAt,long nextAttemptAt,
+                    long expiresAt,long version,String attemptId,String lastError,long createdAt,long updatedAt,long initialSeconds,
+                    String planId,int deliveryCount,long ackDeadline,long requestedAt,String taskId,long originalDueAt,long scheduledAt) {
+        this(id,userId,deviceId,title,status,dueAt,nextAttemptAt,expiresAt,version,attemptId,lastError,createdAt,updatedAt,
+             initialSeconds,planId,deliveryCount,ackDeadline,requestedAt,taskId,originalDueAt,scheduledAt,0);
+    }
     public Reminder(String id,long userId,String deviceId,String title,String status,long dueAt,long nextAttemptAt,
                     long expiresAt,long version,String attemptId,String lastError,long createdAt,long updatedAt,long initialSeconds,
                     String planId,int deliveryCount,long ackDeadline,long requestedAt,String taskId,long originalDueAt) {

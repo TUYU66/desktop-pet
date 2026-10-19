@@ -3,8 +3,8 @@ import unittest
 from types import SimpleNamespace as NS
 import test_memory_management as fixtures
 from test_memory import fact, memory, extract, align, review, WHEN
-from core.providers.memory.mem_local_short.mem_local_short import ALIGN_PROMPT
-from core.providers.memory.mem_local_short.management import RECENT_PROMPT, RESOLVE_PROMPT, SOURCE_REPAIR_PROMPT, ENTITY_BIND_PROMPT
+from legacy_memory.mem_local_short import ALIGN_PROMPT
+from legacy_memory.management import RECENT_PROMPT, RESOLVE_PROMPT, SOURCE_REPAIR_PROMPT, ENTITY_BIND_PROMPT
 
 
 class SourceReferenceTests(unittest.IsolatedAsyncioTestCase):
@@ -85,7 +85,7 @@ class SourceReferenceTests(unittest.IsolatedAsyncioTestCase):
     async def test_context_link_supplies_standard_object_and_verified_provenance(self):
         text="去年在市场买的"; quote="我有两台打印机"
         old=memory(fact("购买来源","商店","historical","去年在商店买的",subject="用户的打印机"))
-        from core.providers.memory.mem_local_short.management import Registry
+        from legacy_memory.management import Registry
         eid=next(e for e in Registry([old]).entities if e!="user")
         source=extract(fact("购买来源","市场","historical",text,subject="两台打印机"))
         source["facts"][0]["sourceId"]=0

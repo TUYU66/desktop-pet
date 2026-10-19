@@ -111,7 +111,9 @@ class MusicWait:
                         conn.reminder_music_warning='提醒选曲已失效或无法读取，本次使用默认提醒音乐。'
                         conn.logger.bind(tag=__name__).warning(conn.reminder_music_warning)
                 await play()
-            while time.monotonic()-started<65 and not conn.stop_event.is_set() and not conn.client_abort:
+            # Server deadlines normally end this sooner. Even a stale snapshot
+            # must not keep the reminder melody alive beyond the response grace.
+            while time.monotonic()-started<55 and not conn.stop_event.is_set() and not conn.client_abort:
                 snapshot=await reminder_client.state(self.device)
                 indexed={x['id']:x for x in snapshot['items']}
                 pending=[]; dispatching=False

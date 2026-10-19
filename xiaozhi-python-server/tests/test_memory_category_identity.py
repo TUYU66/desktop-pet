@@ -7,9 +7,9 @@ from test_memory_categories import classified
 import test_memory_policy as support
 from test_memory_policy import record
 from test_memory_management import resolution
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.categories import classified_source
-from core.providers.memory.mem_local_short.management import Registry
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.categories import classified_source
+from legacy_memory.management import Registry
 
 
 class CategoryIdentityTests(unittest.IsolatedAsyncioTestCase):

@@ -51,6 +51,9 @@ public class ChatController {
     public Result<List<ChatHistoryEntity>> messages(@PathVariable String sessionId) {
         return Result.ok(historyDao.selectList(
                 new LambdaQueryWrapper<ChatHistoryEntity>()
+                        .select(ChatHistoryEntity::getId,ChatHistoryEntity::getSessionId,
+                            ChatHistoryEntity::getChatType,ChatHistoryEntity::getContent,
+                            ChatHistoryEntity::getCreateDate,ChatHistoryEntity::getReportTime)
                         .eq(ChatHistoryEntity::getSessionId, sessionId)
                         .orderByAsc(ChatHistoryEntity::getCreateDate)));
     }
@@ -170,6 +173,7 @@ public class ChatController {
         if (body.containsKey("requestId")) payload.put("requestId", body.get("requestId"));
         return webClient.post()
                     .uri(pythonBaseUrl + "/xiaozhi/chat/send")
+                    .header("Service-Key",deviceServiceKey)
                     .bodyValue(payload)
                     .exchangeToMono(response -> response.bodyToMono(Map.class)
                             .map(result -> {
@@ -189,6 +193,7 @@ public class ChatController {
     public Mono<Result<Object>> requestStatus(@PathVariable String requestId) {
         if(!requestId.matches("[A-Za-z0-9_-]{1,128}")) return Mono.just(Result.error("请求编号无效"));
         return webClient.get().uri(pythonBaseUrl+"/xiaozhi/chat/requests/{id}",requestId)
+            .header("Service-Key",deviceServiceKey)
             .exchangeToMono(response->response.bodyToMono(Map.class).map(body->{
                 Object code=body.get("code");
                 if(response.statusCode().is2xxSuccessful()&&code instanceof Number n&&n.intValue()==0)
@@ -224,17 +229,17 @@ public class ChatController {
 
     /** 清除指定角色的记忆（转发到 Python） */
     @DeleteMapping("/memory/{roleId}")
-    public Result<?> clearMemory(@PathVariable String roleId) {
-        try {
-            webClient.delete()
+    public Mono<Result<Object>> clearMemory(@PathVariable String roleId) {
+        return webClient.delete()
                     .uri(pythonBaseUrl + "/xiaozhi/memory/" + roleId)
+                    .header("Service-Key",deviceServiceKey)
                     .retrieve()
-                    .bodyToMono(String.class)
-                    .block(java.time.Duration.ofSeconds(10));
-            return Result.ok();
-        } catch (Exception e) {
-            return Result.error("清除记忆失败: " + e.getMessage());
-        }
+                    .bodyToMono(Map.class)
+                    .map(body -> ((Number)body.getOrDefault("code",500)).intValue()==0
+                        ? Result.ok() : Result.error("清除记忆未确认"))
+                    .defaultIfEmpty(Result.error("清除记忆响应为空"))
+                    .timeout(Duration.ofSeconds(10))
+                    .onErrorReturn(Result.error("清除记忆失败，请核实服务状态"));
     }
 
     /** 保存会话记忆摘要（Python 调用 → 存入数据库） */

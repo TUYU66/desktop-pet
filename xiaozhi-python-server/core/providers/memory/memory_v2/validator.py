@@ -1,4 +1,5 @@
 """确定性执行边界，不推断纠错、归属或自然语言关系。"""
+
 import re
 
 from .models import CATEGORIES, Plan, ProtocolError, integer, text
@@ -20,10 +21,7 @@ def _is_mainly_chinese(value):
     cjk_count = len(_CJK_RE.findall(value))
     latin_count = len(_LATIN_RE.findall(value))
 
-    return (
-        cjk_count >= 2
-        and cjk_count >= latin_count
-    )
+    return cjk_count >= 2 and cjk_count >= latin_count
 
 
 def _validate_memory_language(memory, turn):
@@ -51,35 +49,20 @@ def _validate_memory_language(memory, turn):
 
 
 def memory_fields(raw, turn):
-    if (
-        not isinstance(raw, dict)
-        or raw.get("category") not in CATEGORIES
-    ):
+    if not isinstance(raw, dict) or raw.get("category") not in CATEGORIES:
         raise ProtocolError("memory_category_invalid")
 
     memory = {
         "category": raw["category"],
-        "key": text(
-            raw.get("key"),
-            "memory_key_invalid",
-            120,
-        ),
-        "content": text(
-            raw.get("content"),
-            "memory_content_invalid",
-            2000,
-        ),
+        "key": text(raw.get("key"), "memory_key_invalid", 120),
+        "content": text(raw.get("content"), "memory_content_invalid", 2000),
         "source": turn.latest_user,
         "sourceMessageId": turn.message_id,
         "observedAt": turn.observed_at,
     }
 
     if "time" in raw:
-        memory["time"] = text(
-            raw["time"],
-            "memory_time_invalid",
-            120,
-        )
+        memory["time"] = text(raw["time"], "memory_time_invalid", 120)
 
     _validate_memory_language(memory, turn)
 
@@ -106,10 +89,21 @@ def validate(answer, turn, batch):
         reason = raw.get("reason")
         target = None
         if action == "add":
-            if reason != "new" or raw.get("targetId") is not None or raw.get("expectedVersion") is not None:
+            if (
+                reason != "new"
+                or raw.get("targetId") is not None
+                or raw.get("expectedVersion") is not None
+            ):
                 raise ProtocolError("add_contract_invalid")
         else:
-            if reason not in {"changed", "corrected", "refines", "cancelled", "completed", "invalidated"}:
+            if reason not in {
+                "changed",
+                "corrected",
+                "refines",
+                "cancelled",
+                "completed",
+                "invalidated",
+            }:
                 raise ProtocolError("update_reason_invalid")
             ident = integer(raw.get("targetId"), "target_id_invalid")
             version = integer(raw.get("expectedVersion"), "target_version_invalid")
@@ -122,7 +116,9 @@ def validate(answer, turn, batch):
                 raise ProtocolError("target_invalidated")
             if target["status"] == "closed" and reason not in {"corrected", "invalidated"}:
                 raise ProtocolError("closed_target_immutable")
-            if reason in {"cancelled", "completed"} and (target["category"] != "goal" or target["status"] != "active"):
+            if reason in {"cancelled", "completed"} and (
+                target["category"] != "goal" or target["status"] != "active"
+            ):
                 raise ProtocolError("target_not_active_goal")
             touched.add(ident)
         if reason == "invalidated":
@@ -137,8 +133,12 @@ def validate(answer, turn, batch):
                 raise ProtocolError("note_authorization_required")
             if reason in {"cancelled", "completed"} and memory["category"] != "goal":
                 raise ProtocolError("closed_goal_category_invalid")
-        write = {"action": "delete" if reason == "invalidated" else action,
-                 "reason": reason, "memory": memory, "explicit": explicit}
+        write = {
+            "action": "delete" if reason == "invalidated" else action,
+            "reason": reason,
+            "memory": memory,
+            "explicit": explicit,
+        }
         if target:
             write.update(targetId=target["id"], expectedVersion=target["version"])
         writes.append(write)
@@ -146,13 +146,24 @@ def validate(answer, turn, batch):
     projected = {ident: dict(row) for ident, row in actual.items()}
     for offset, op in enumerate(writes):
         old = projected.get(op.get("targetId"))
-        status = ("invalidated" if op["reason"] == "invalidated" else "closed" if op["reason"] in {"cancelled", "completed"}
-                  else old["status"] if old else "active")
+        status = (
+            "invalidated"
+            if op["reason"] == "invalidated"
+            else (
+                "closed"
+                if op["reason"] in {"cancelled", "completed"}
+                else old["status"] if old else "active"
+            )
+        )
         if op["action"] == "add" and op["memory"]["category"] != "event":
-            if any(r["status"] == "active" and r["category"] == op["memory"]["category"]
-                   and normalized(r["content"]) == normalized(op["memory"]["content"]) for r in projected.values()):
+            if any(
+                r["status"] == "active"
+                and r["category"] == op["memory"]["category"]
+                and normalized(r["content"]) == normalized(op["memory"]["content"])
+                for r in projected.values()
+            ):
                 raise ProtocolError("duplicate_content")
-        projected[op.get("targetId", -offset-1)] = {**op["memory"], "status": status}
+        projected[op.get("targetId", -offset - 1)] = {**op["memory"], "status": status}
     slots = set()
     for row in projected.values():
         if row["status"] != "active" or row["category"] == "event":

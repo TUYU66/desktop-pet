@@ -1,3 +1,5 @@
+import PageDoodle from '../../components/PageDoodle';
+import PreviewValue from '../../components/motion/PreviewValue';
 import { useState, useEffect, useCallback } from 'react';
 import { Alert, Card, Input, Button, App, Spin, Form, Select, Space, Typography } from 'antd';
 import { getBotConfig, saveBotConfig } from '../../api/user';
@@ -127,7 +129,7 @@ export default function Settings() {
   };
 
   return <div className="settings-page page-width">
-    <div className="page-heading"><div><h1>桌面宠物设置</h1></div></div>
+    <div className="page-heading"><div><h1>桌面宠物设置<PageDoodle kind="settings" /></h1></div></div>
     <Typography.Paragraph type="secondary">设置伙伴的名字、说话方式、唤醒词和设备音量。名字与唤醒词分别设置。</Typography.Paragraph>
     {loading && <Spin />}
     {loadFailed && <Alert type="error" title="无法读取配置"
@@ -153,11 +155,11 @@ export default function Settings() {
       </Card>
       <aside className="settings-preview" hidden={loading || loadFailed}>
         <div className="preview-header"><span className="preview-mascot" aria-hidden="true"><RobotOutlined /></span><span className="preview-label">配置概览{dirty || wakeDirty ? ' · 未保存' : ''}</span></div>
-        <h2>{previewName?.trim() || '桌面宠物'}</h2>
+        <h2><PreviewValue value={previewName}>{previewName?.trim() || '桌面宠物'}</PreviewValue></h2>
         <dl className="preview-facts">
-          <div><dt>称呼你</dt><dd>{previewUser?.trim() || '未设置'}</dd></div>
-          <div><dt>音色</dt><dd><SoundOutlined /> {voiceLabel || previewVoice || '未选择'}</dd></div>
-          <div><dt>唤醒词</dt><dd>{previewWakeWord === null ? '读取中' : previewWakeWord ? `${previewWakeWord} / 你好小智` : '你好小智'}</dd></div>
+          <div><dt>称呼你</dt><dd><PreviewValue value={previewUser}>{previewUser?.trim() || '未设置'}</PreviewValue></dd></div>
+          <div><dt>音色</dt><dd><PreviewValue value={previewVoice}><SoundOutlined /> {voiceLabel || previewVoice || '未选择'}</PreviewValue></dd></div>
+          <div><dt>唤醒词</dt><dd><PreviewValue value={previewWakeWord}>{previewWakeWord === null ? '读取中' : previewWakeWord ? `${previewWakeWord} / 你好小智` : '你好小智'}</PreviewValue></dd></div>
         </dl>
       </aside></div>
     <AvatarSettings onDirtyChange={setAvatarDirty} />

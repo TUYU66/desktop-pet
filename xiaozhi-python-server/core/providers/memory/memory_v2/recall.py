@@ -1,4 +1,5 @@
 """读取已提交记忆；不调用旧模块，也不触发写入模型。"""
+
 import asyncio
 import json
 import re
@@ -20,50 +21,30 @@ def query_keywords(query):
     return tuple(dict.fromkeys(part.strip() for part in chunks if part.strip()))[:16]
 
 
-async def recall(
-    store,
-    role_id,
-    query,
-    list_all=False,
-):
+async def recall(store, role_id, query, list_all=False):
 
     if list_all:
 
-        _, rows = read_snapshot(
-            await store.snapshot(role_id)
-        )
+        _, rows = read_snapshot(await store.snapshot(role_id))
 
     else:
 
         batch = await retrieve(
             store,
             role_id,
-            (
-                RetrievalIntent(
-                    query_keywords(query),
-                    query
-                    or "用户长期记忆",
-                ),
-            ),
+            (RetrievalIntent(query_keywords(query), query or "用户长期记忆"),),
             limit=12,
         )
 
         rows = batch.records
 
-    rows = [
-        row
-        for row in rows
-        if row["status"]
-        != "invalidated"
-    ]
+    rows = [row for row in rows if row["status"] != "invalidated"]
 
     if not rows:
         return "没有检索到相关长期记忆。"
 
     lines = [
-        "以下是已保存记忆。"
-        "closed表示已结束，不是当前目标；"
-        "陈述日期不能用于自动推算年龄。"
+        "以下是已保存记忆。" "closed表示已结束，不是当前目标；" "陈述日期不能用于自动推算年龄。"
     ]
 
     used = len(lines[0])
@@ -71,41 +52,30 @@ async def recall(
     def append(line):
         nonlocal used
 
-        if (
-            used
-            + len(line)
-            + 1
-            > 5900
-        ):
-            lines.append(
-                "【仅展示部分记忆，"
-                "完整记录请查看网页】"
-            )
+        if used + len(line) + 1 > 5900:
+            lines.append("【仅展示部分记忆，" "完整记录请查看网页】")
             return False
 
         lines.append(line)
 
-        used += (
-            len(line)
-            + 1
-        )
+        used += len(line) + 1
 
         return True
 
     histories = {}
     if not list_all:
         slots = asyncio.Semaphore(4)
+
         async def read_history(row):
             async with slots:
                 histories[row["id"]] = await store.history(role_id, row["id"])
+
         await asyncio.gather(*(read_history(row) for row in rows))
 
     for row in rows:
 
         if not append(
-            f"- [{row['status']}; "
-            f"陈述于{row.get('observedAt', '未知')}] "
-            f"{row['content']}"
+            f"- [{row['status']}; " f"陈述于{row.get('observedAt', '未知')}] " f"{row['content']}"
         ):
             break
 
@@ -115,43 +85,27 @@ async def recall(
 
             if history is None:
 
-                if not append(
-                    "  历史暂时不可用，"
-                    "不能推断没有过去状态。"
-                ):
+                if not append("  历史暂时不可用，" "不能推断没有过去状态。"):
                     break
 
             for entry in history or []:
 
-                if (
-                    entry.get("reason")
-                    not in {
-                        "changed",
-                        "cancelled",
-                        "completed",
-                    }
-                    or not entry.get(
-                        "oldJson"
-                    )
-                ):
+                if entry.get("reason") not in {
+                    "changed",
+                    "cancelled",
+                    "completed",
+                } or not entry.get("oldJson"):
                     continue
 
-                previous = json.loads(
-                    entry["oldJson"]
-                )
+                previous = json.loads(entry["oldJson"])
 
-                if (
-                    previous.get("status")
-                    == "active"
-                ):
+                if previous.get("status") == "active":
 
                     if not append(
                         "  曾经（陈述于"
                         f"{previous.get('observedAt', '未知')}"
                         f"）：{previous['content']}"
                     ):
-                        return "\n".join(
-                            lines
-                        )
+                        return "\n".join(lines)
 
     return "\n".join(lines)

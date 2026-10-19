@@ -52,7 +52,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         from unittest.mock import AsyncMock, patch
         from types import SimpleNamespace as NS
         from test_memory import MODULE, Llm
-        from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
+        from legacy_memory.mem_local_short import MemoryProvider
         provider=MemoryProvider({"memory_policy":"legacy"}); provider.init_memory("default",Llm())
         snapshot=dict(schemaVersion=2,retrievalVersion=1,roleId="default",revision=1,memories=[])
         writer=AsyncMock()

@@ -5,8 +5,8 @@ from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock, patch
 
 from test_memory import Llm, MODULE, WHEN, review, fact, memory
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.policy import explicit_request
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.policy import explicit_request
 
 
 def candidate(field, value, **extra):

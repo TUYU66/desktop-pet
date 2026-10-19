@@ -5,11 +5,11 @@ from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock, patch
 
 from test_memory import Llm, MODULE, WHEN, fact, memory, extract, align, review, FaultInjectedProvider
-from core.providers.memory.mem_local_short.mem_local_short import MemoryProvider
-from core.providers.memory.mem_local_short.management import (
+from legacy_memory.mem_local_short import MemoryProvider
+from legacy_memory.management import (
     COVERAGE_PROMPT, RECENT_PROMPT, RESOLVE_PROMPT, REPAIR_PROMPT, Registry,
 )
-from core.providers.memory.mem_local_short.facts import digest, normalize, fact_key
+from legacy_memory.facts import digest, normalize, fact_key
 
 
 class ScriptedLlm(Llm):

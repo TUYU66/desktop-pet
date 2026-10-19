@@ -30,6 +30,8 @@ def notice_text(item, remaining=0):
         'missed': '我叫过你几次，还没听到回应，就先不继续重复了。',
         'delivery_unknown': '有没有播到，我还没确认，你帮我看一下有没有收到。',
     }[item['status']]
+    if item['status']=='delivery_unknown' and '未成功送达' in str(item.get('lastError','')):
+        detail='当时没能送达。你可以记为收到，或者重新安排时间。'
     text = '顺便提醒一下，' + prefix + '，' + detail
     if remaining > 0:
         text += f'另外还有{remaining}条还没回应，你在日程页面看一下吧。'
@@ -82,6 +84,15 @@ async def deliver(conn, sentence_id, *, standalone=False, text_only=False):
             expected = stage(item)
             if not expected:
                 continue
+            # One notice per stage in a continuing voice conversation; web messages
+            # share a short cooldown but never wake the device.
+            noticed = getattr(conn, 'reminder_noticed_stages', set())
+            marker = (item['id'], expected)
+            if marker in noticed and getattr(conn, 'chat_input_source', None) != 'web':
+                continue
+            cooldown = getattr(conn, 'reminder_notice_times', {})
+            if time.monotonic() - cooldown.get(marker, -1000) < 120:
+                continue
             token = str(uuid.uuid4())
             body = dict(id=item['id'], token=token, stage=expected)
             result = await command(device, dict(body, action='followup_claim'))
@@ -94,7 +105,7 @@ async def deliver(conn, sentence_id, *, standalone=False, text_only=False):
             audio = []
             reported = False
             def report_notice():
-                from core.handle.reportHandle import enqueue_tts_report
+                from core.reporting.chat_reports import enqueue_tts_report
                 from core.utils.dialogue import Message
                 from core.reminders.reply import remember
                 enqueue_tts_report(conn, text, audio)
@@ -135,6 +146,11 @@ async def deliver(conn, sentence_id, *, standalone=False, text_only=False):
             if not reported:
                 report_notice()
             finished = bool((await command(device, dict(body, action='followup_finish'))).get('finished'))
+            if finished:
+                noticed.add(marker)
+                conn.reminder_noticed_stages = noticed
+                conn.reminder_notice_times = {k: v for k, v in cooldown.items() if time.monotonic()-v < 300}
+                conn.reminder_notice_times[marker] = time.monotonic()
             return True
         return False
     except asyncio.CancelledError:

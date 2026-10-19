@@ -5,7 +5,7 @@ import json
 from unittest.mock import AsyncMock, patch
 
 from check_memory_live import load_config, create_instance, MemoryProvider, NS, WHEN, MODULE
-from core.providers.memory.mem_local_short.facts import decode_fact, numeric_quantity
+from legacy_memory.facts import decode_fact, numeric_quantity
 
 
 async def main():

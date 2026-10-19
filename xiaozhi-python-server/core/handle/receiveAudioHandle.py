@@ -15,19 +15,27 @@ TAG = __name__
 
 
 async def handleAudioMessage(conn: "ConnectionHandler", audio):
+    from core.utils.voice_diagnostics import count
+    count(conn, 'processed')
     from core.conversation.standby import conversation_awake, supports_standby
     if supports_standby(conn) and not conversation_awake(conn):
+        count(conn, 'blocked_awake')
         return  # Web/reminder speech never grants microphone access.
     music = getattr(conn, 'local_music', None)
     if music and music.state == 'playing':
+        count(conn, 'blocked_music')
         return  # Music standby accepts wake/control messages, not microphone echo.
     if getattr(conn, "standby", False):
+        count(conn, 'blocked_standby')
         return
     # 当前片段是否有人说话
     have_voice = conn.vad.is_vad(conn, audio)
+    if have_voice:
+        count(conn, 'voiced')
     # 如果设备刚刚被唤醒，短暂忽略VAD检测（不丢弃音频，只是标记无语音）
     if (getattr(conn, "just_woken_up", False)
             and not (conn.features or {}).get('voice_barge_in')):
+        count(conn, 'warmup')
         have_voice = False
         # 设置一个短暂延迟后恢复VAD检测
         if not hasattr(conn, "vad_resume_task") or conn.vad_resume_task.done():

@@ -1,6 +1,7 @@
 import os
 import yaml
 import httpx
+from config.private_environment import expand_environment, load_private_environment
 from collections.abc import Mapping
 
 
@@ -37,7 +38,7 @@ async def load_remote_config(config: dict) -> dict:
         async with httpx.AsyncClient(timeout=5) as client:
             resp = await client.get(
                 f"{java_url}/xiaozhi/api/user/config",
-                headers={"Service-Key": "xiaozhi-python"},
+                headers={"Service-Key": os.environ.get("XIAOZHI_PYTHON_SERVICE_KEY", "")},
             )
             if resp.status_code == 200:
                 data = resp.json().get("data", {})
@@ -79,6 +80,7 @@ def reload_config_from_java(config: dict) -> dict:
 
 def load_config() -> dict:
     """加载配置：本地 config.yaml + 持久化配置 data/.config.yaml"""
+    load_private_environment()
     # 加载 config.yaml 基础配置
     project_dir = get_project_dir()
     config = read_config(project_dir + "config.yaml")
@@ -89,7 +91,7 @@ def load_config() -> dict:
         # 合并到 config 中（persistent 优先级更高）
         _deep_merge(config, persistent)
 
-    return config
+    return expand_environment(config)
 
 
 def _deep_merge(base: dict, override: dict):

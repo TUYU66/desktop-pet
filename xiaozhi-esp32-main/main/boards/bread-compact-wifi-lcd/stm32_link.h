@@ -39,7 +39,14 @@ private:
     void Poll();
     void ProcessLine(const char* line);
     void FeedByte(uint8_t byte);
-    std::string RequestMotion(const char* command);
+    std::string RequestMotion(const char* command, unsigned int app_request = 0);
+    struct AppBluetoothRequest { unsigned int id; bool enabled; };
+    static void AppBluetoothTask(void* context);
+    void RunAppBluetooth(const AppBluetoothRequest& request);
+    void SendAppBluetoothResult(unsigned int id, bool success);
+    QueueHandle_t app_bluetooth_queue_{nullptr};
+    std::atomic<unsigned int> app_bluetooth_id_{0};
+    std::atomic<bool> app_bluetooth_target_{false};
     bool BatteryFresh() const;
     bool LinkFresh() const;
     void MarkFrame(); // Only after CRC + recognized payload validation.

@@ -1,5 +1,6 @@
 """Single-device wake phrase delivery. Only a matching device ACK means applied."""
 import asyncio
+import os
 import json
 import logging
 import re
@@ -82,7 +83,7 @@ class WakeWordSync:
                 # notifications and Python restarts, including clearing the word.
                 async with httpx.AsyncClient(timeout=5) as client:
                     response = await client.get(f"{java_url}/xiaozhi/api/user/config",
-                                                headers={"Service-Key": "xiaozhi-python"})
+                                                headers={"Service-Key": os.environ.get("XIAOZHI_PYTHON_SERVICE_KEY", "")})
                     response.raise_for_status()
                     payload = response.json()
                     if payload.get('code') != 0 or not isinstance(payload.get('data'), dict):

@@ -9,7 +9,7 @@ from config.logger import setup_logging
 TAG = __name__
 _logger = setup_logging()
 
-_COMMON_HEADERS = {"Service-Key": "xiaozhi-python"}
+_COMMON_HEADERS = {"Service-Key": os.environ.get("XIAOZHI_PYTHON_SERVICE_KEY", "")}
 
 _MEMORY_FAILURE_HINTS = {
     "memory_service_key_invalid": "Java/Python 记忆服务密钥不一致",
@@ -53,7 +53,7 @@ def _memory_result(operation, response):
 
 
 def memory_headers():
-    headers = {"Service-Key": os.environ.get("XIAOZHI_MEMORY_SERVICE_KEY", "xiaozhi-python")}
+    headers = {"Service-Key": os.environ.get("XIAOZHI_MEMORY_SERVICE_KEY", "")}
     owner = os.environ.get("XIAOZHI_MEMORY_OWNER_ID")
     if owner:
         headers["Memory-Owner-Id"] = owner

@@ -149,7 +149,7 @@ async def say(conn, text, standby=None, sentence_id=None):
 
 async def handle_input(conn, text, web=False):
     """Return (handled, response/original deferred question). No LLM invents tracks."""
-    from core.handle.reportHandle import enqueue_asr_report, enqueue_tts_report
+    from core.reporting.chat_reports import enqueue_asr_report, enqueue_tts_report
     from core.conversation.standby import exit_requested
     if exit_requested(text):
         conn.music_chat_pending=None
