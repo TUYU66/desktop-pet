@@ -1,0 +1,6 @@
+# Copy to data/.config.yaml; never commit the actual private configuration.
+LLM:
+  DeepSeekChatLLM:
+    api_key: ""
+  DeepSeekMemoryLLM:
+    api_key: ""
