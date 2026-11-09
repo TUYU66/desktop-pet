@@ -97,8 +97,6 @@ async def checkWakeupWords(conn: "ConnectionHandler", text):
         return False
 
     conn.just_woken_up = True
-    await send_tts_message(conn, "start")
-
     # 获取当前音色
     voice = getattr(conn.tts, "voice", "default")
     if not voice:
@@ -106,16 +104,23 @@ async def checkWakeupWords(conn: "ConnectionHandler", text):
 
     # 获取唤醒词回复配置
     response = wakeup_words_config.get_wakeup_response(voice)
-    if not response or not response.get("file_path"):
-        response = {
-            "voice": "default",
-            "file_path": "config/assets/wakeup_words_short.wav",
-            "time": 0,
-            "text": "我在这里哦！",
-        }
-
-    # 获取音频数据 — 直接从文件加载 Opus 帧（跳过预编码，唤醒只触发一次）
-    opus_packets = await audio_to_data(response.get("file_path"), use_cache=False)
+    generation = getattr(conn, 'input_generation', 0)
+    provider = conn.tts
+    if response and response.get('voice') == voice and response.get('file_path'):
+        opus_packets = await audio_to_data(response['file_path'], use_cache=False)
+    else:
+        # No fixed default human voice: a cold cache uses the selected voice.
+        response = {'voice': voice, 'time': 0, 'text': '我在呢，你说。'}
+        try:
+            opus_packets = await asyncio.wait_for(asyncio.to_thread(provider.to_tts, response['text']), 8)
+            if isinstance(opus_packets, str):
+                opus_packets = await audio_to_data(opus_packets, use_cache=False)
+        except Exception as error:
+            conn.logger.bind(tag=TAG).warning('当前音色唤醒回复生成失败：{}', type(error).__name__)
+            return False
+    if (not opus_packets or provider is not conn.tts or conn.stop_event.is_set()
+            or getattr(conn, 'input_generation', 0) != generation):
+        return False
     conn.client_abort = False
 
     # 将唤醒词回复视为新会话，生成新的 sentence_id，确保流控器重置

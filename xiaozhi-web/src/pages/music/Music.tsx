@@ -159,13 +159,13 @@ export default function Music() {
         catch (e) { onError?.(e as Error); message.error(e instanceof Error ? e.message : '上传失败'); }
         finally { setUploading(false); }
       }}><Button icon={<UploadOutlined />} loading={uploading} disabled={!!deleting}>上传音乐</Button></Upload></Space></div>
-      <p className="music-hint">单首最大 32 MB，建议文件名为“歌手-歌名.mp3”，例如“周杰伦-彩虹.mp3”。播放时唤醒会临时暂停并询问操作，说“继续播放”可接着听。</p>
+      <p className="music-hint">MP3，单首不超过 32 MB。文件名建议“歌手-歌名”。</p>
       {uploading && <Progress percent={progress} status="active" />}
       {loading ? <Spin /> : !tracks.length ? <Empty description="还没有音乐，上传第一首 MP3 吧" /> : <div className="music-tracks">{filteredTracks.map((track, index) => <div className={`music-track ${localState?.trackId === track.id ? 'selected' : ''}`} key={track.id}><span className="music-number">{String(index + 1).padStart(2, '0')}</span><Avatar className="music-row-cover" shape="square" size={44} src={albumCover(track.cover)} icon={<CustomerServiceOutlined />} /><div className="music-track-title"><strong>{track.title || track.name}</strong><small>{track.artist || "未知演唱者"}{track.album ? ` · ${track.album}` : ""} · {(track.size / 1024 / 1024).toFixed(1)} MB{localState?.trackId === track.id ? ` · ${labels[localState.state]}` : ''}</small></div><Button aria-label={`播放 ${track.name}`} icon={<PlayCircleOutlined />} disabled={busy || !deviceId || deleting === track.id} onClick={() => void control('play', 'local', track.id)}>播放</Button><Popconfirm disabled={uploading || !!deleting} title="删除这首音乐？" description="正在播放的歌曲会停止。" onConfirm={() => remove(track.id)} okText="删除" cancelText="取消"><Button danger type="text" disabled={uploading || !!deleting} loading={deleting === track.id} aria-label={`删除 ${track.name}`} icon={<DeleteOutlined />} /></Popconfirm></div>)}{search && !filteredTracks.length && <Empty description="没有匹配的音乐" />}</div>}
     </div>
   </>;
   return <div className="music-page">
-    <header className="music-heading"><div><h1>音乐空间<PageDoodle kind="music" /></h1><p>从网易云歌单或本地歌曲中选歌，在桌面宠物上播放。</p></div><Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新</Button></header>
+    <header className="music-heading"><div><h1>音乐空间<PageDoodle kind="music" /></h1></div><Button icon={<ReloadOutlined />} onClick={() => void refresh()}>刷新</Button></header>
     {(error || libraryError) && <Alert type="warning" showIcon message={error || libraryError} />}
     {devices.length > 1 && <Select aria-label="播放设备" disabled={busy} value={deviceId || undefined} placeholder="选择在线设备"
       options={devices.map(d => ({ value: d.id, label: d.name?.trim() || `桌面宠物 · ${d.id}` }))} onChange={setDeviceId} />}

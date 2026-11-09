@@ -235,6 +235,7 @@ void Application::InitializeProtocol() {
                     if (epoch != playback_epoch_.load() || GetDeviceState() != kDeviceStateListening ||
                             !conversation_awake_.load()) return;
                     if (state == "start") listening_display_phase_ = ListeningDisplayPhase::Recognizing;
+                    else if (state == "done") listening_display_phase_ = ListeningDisplayPhase::Waiting;
                     else if (state == "empty") listening_display_phase_ = ListeningDisplayPhase::Empty;
                     else if (state == "timeout") listening_display_phase_ = ListeningDisplayPhase::Timeout;
                     else if (state == "error") listening_display_phase_ = ListeningDisplayPhase::Error;
@@ -272,6 +273,12 @@ void Application::InitializeProtocol() {
             if (cJSON_IsObject(payload)) {
                 McpServer::GetInstance().ParseMessage(payload);
             }
+        } else if (strcmp(type->valuestring, "bluetooth_control_result") == 0) {
+            auto id = cJSON_GetObjectItem(root, "id");
+            auto played = cJSON_GetObjectItem(root, "played");
+            if (cJSON_IsNumber(id) && id->valuedouble >= 1 && id->valuedouble <= 65535 &&
+                id->valuedouble == id->valueint && cJSON_IsBool(played))
+                Board::GetInstance().OnBluetoothSpeechResult(static_cast<unsigned int>(id->valueint), cJSON_IsTrue(played));
         } else if (strcmp(type->valuestring, "system") == 0) {
             auto command = cJSON_GetObjectItem(root, "command");
             if (cJSON_IsString(command)) {

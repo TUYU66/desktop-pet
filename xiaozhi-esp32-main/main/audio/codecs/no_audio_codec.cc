@@ -2,12 +2,15 @@
 
 #include <esp_log.h>
 #include <cmath>
+#include <algorithm>
 #include <cstring>
 #include <esp_heap_caps.h>
 
 #define TAG "NoAudioCodec"
 
 NoAudioCodec::~NoAudioCodec() {
+    heap_caps_free(output_buffer_);
+    output_buffer_ = nullptr;
     if (rx_handle_ != nullptr) {
         ESP_ERROR_CHECK(i2s_channel_disable(rx_handle_));
     }
@@ -87,45 +90,45 @@ NoAudioCodecSimplex::NoAudioCodecSimplex(int input_sample_rate, int output_sampl
 }
 
 int NoAudioCodec::Write(const int16_t* data, int samples) {
-    // samples 是 16 位采样点数量，不是字节数；返回值也统一换算为采样点数量。
     if (data == nullptr || samples <= 0) return 0;
     std::lock_guard<std::mutex> lock(data_if_mutex_);
 
-    // output_volume_: 0-100
-    // volume_factor_: 0-65536
-    int32_t volume_factor = pow(double(output_volume_) / 100.0, 2) * 65536;
-
-    // I2S DMA 需要 buffer 在内部 SRAM 中，不能放在 PSRAM
-    // 使用 DMA-capable 的内部内存分配
-    size_t buf_size = samples * sizeof(int32_t);
-    int32_t* buffer = (int32_t*)heap_caps_malloc(buf_size, MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA);
-    if (buffer == nullptr) {
-        ESP_LOGE(TAG, "Failed to allocate I2S DMA buffer (%u bytes)", buf_size);
-        return 0;
-    }
-
-    for (int i = 0; i < samples; i++) {
-        int64_t temp = int64_t(data[i]) * volume_factor;
-        if (temp > INT32_MAX) {
-            buffer[i] = INT32_MAX;
-        } else if (temp < INT32_MIN) {
-            buffer[i] = INT32_MIN;
-        } else {
-            buffer[i] = static_cast<int32_t>(temp);
+    // 24 kHz 下每块 10 ms；只占用 960 字节内部内存，后续播放复用。
+    if (output_buffer_ == nullptr) {
+        output_buffer_ = static_cast<int32_t*>(heap_caps_malloc(
+            kOutputChunkSamples * sizeof(int32_t), MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
+        if (output_buffer_ == nullptr) {
+            ESP_LOGE(TAG, "Failed to allocate I2S conversion buffer");
+            return 0;
         }
     }
-
-    size_t bytes_written = 0;
-    auto ret = i2s_channel_write(tx_handle_, buffer, buf_size, &bytes_written, 500);
-    heap_caps_free(buffer);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "I2S write failed: %d (written=%u/%u bytes)", ret,
-            static_cast<unsigned>(bytes_written), static_cast<unsigned>(buf_size));
-    } else if (bytes_written != buf_size) {
-        ESP_LOGW(TAG, "I2S short write: %u/%u bytes",
-            static_cast<unsigned>(bytes_written), static_cast<unsigned>(buf_size));
+    const int32_t volume_factor = pow(double(output_volume_) / 100.0, 2) * 65536;
+    int total_samples = 0;
+    while (total_samples < samples) {
+        const size_t chunk_samples = std::min(kOutputChunkSamples,
+            static_cast<size_t>(samples - total_samples));
+        for (size_t i = 0; i < chunk_samples; ++i) {
+            const int64_t value = int64_t(data[total_samples + i]) * volume_factor;
+            output_buffer_[i] = value > INT32_MAX ? INT32_MAX
+                : value < INT32_MIN ? INT32_MIN : static_cast<int32_t>(value);
+        }
+        const size_t bytes = chunk_samples * sizeof(int32_t);
+        size_t offset = 0;
+        while (offset < bytes) {
+            size_t written = 0;
+            const auto ret = i2s_channel_write(tx_handle_,
+                reinterpret_cast<const uint8_t*>(output_buffer_) + offset,
+                bytes - offset, &written, 500);
+            offset += written;
+            if (ret != ESP_OK || written == 0) {
+                ESP_LOGE(TAG, "I2S write incomplete: error=%d written=%u/%u bytes", ret,
+                    static_cast<unsigned>(offset), static_cast<unsigned>(bytes));
+                return total_samples + offset / sizeof(int32_t);
+            }
+        }
+        total_samples += chunk_samples;
     }
-    return bytes_written / sizeof(int32_t);
+    return total_samples;
 }
 
 int NoAudioCodec::Read(int16_t* dest, int samples) {

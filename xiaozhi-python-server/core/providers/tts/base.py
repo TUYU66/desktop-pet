@@ -422,9 +422,11 @@ class TTSProviderBase(ABC):
     # 这里默认是非流式的处理方式
     # 流式处理方式请在子类中重写
     def tts_text_priority_thread(self):
+        pending_message = None
         while not self.conn.stop_event.is_set():
             try:
-                message = self.tts_text_queue.get(timeout=1)
+                message = pending_message if pending_message is not None else self.tts_text_queue.get(timeout=1)
+                pending_message = None
                 if self.conn.client_abort:
                     logger.bind(tag=TAG).info("收到打断信息，终止TTS文本处理线程")
                     continue
@@ -440,6 +442,9 @@ class TTSProviderBase(ABC):
                     self.tts_audio_first_sentence = True
                 elif ContentType.TEXT == message.content_type:
                     self.tts_text_buff.append(message.content_detail)
+                    # While synthesis was running the LLM may have queued more text.
+                    # Coalesce it without waiting, preserving FILE/FIRST/LAST order.
+                    pending_message = self._collect_queued_text(message.sentence_id)
                     segment_text = self._get_segment_text()
                     if segment_text:
                         self.to_tts_stream(segment_text, opus_handler=self.handle_opus)
@@ -491,8 +496,10 @@ class TTSProviderBase(ABC):
                     enqueue_text, enqueue_audio = None, []
                     continue
 
-                # 收到下一个文本开始或会话结束时进行上报
-                if sentence_type is not SentenceType.MIDDLE:
+                # Text-only history follows the paced subtitle callback instead
+                # of synthesis/enqueue time. Keep legacy audio-history reporting.
+                legacy_report = self.report_on_last or self.conn.chat_history_conf == 2
+                if legacy_report and sentence_type is not SentenceType.MIDDLE:
                     if self.report_on_last:
                         # 累积模式：适用于全程只有一个语音流的TTS（如seed-tts-2.0）
                         # FIRST时只记录文本，音频持续累积，仅在LAST时统一上报
@@ -510,12 +517,13 @@ class TTSProviderBase(ABC):
                         enqueue_text = text
 
                 # 收集上报音频数据
-                if isinstance(audio_datas, bytes):
+                if legacy_report and isinstance(audio_datas, bytes):
                     enqueue_audio.append(audio_datas)
 
                 # 发送音频
                 future = asyncio.run_coroutine_threadsafe(
-                    sendAudioMessage(self.conn, sentence_type, audio_datas, text, sentence_id),
+                    sendAudioMessage(self.conn, sentence_type, audio_datas, text, sentence_id,
+                                     report_text=not legacy_report),
                     self.conn.loop,
                 )
                 try:
@@ -548,6 +556,22 @@ class TTSProviderBase(ABC):
         if hasattr(self, "ws") and self.ws:
             await self.ws.close()
 
+    def _collect_queued_text(self, sentence_id):
+        """Drain bounded, contiguous text; return the first unconsumed boundary."""
+        collected = 0
+        while collected < 240:
+            try:
+                message = self.tts_text_queue.get_nowait()
+            except queue.Empty:
+                return None
+            if (message.sentence_id != sentence_id
+                    or message.sentence_type != SentenceType.MIDDLE
+                    or message.content_type != ContentType.TEXT):
+                return message
+            self.tts_text_buff.append(message.content_detail)
+            collected += len(message.content_detail or '')
+        return None
+
     def _get_segment_text(self):
         # 合并当前全部文本并处理未分割部分
         full_text = "".join(self.tts_text_buff)
@@ -568,10 +592,15 @@ class TTSProviderBase(ABC):
             minimum=12
         # Avoid a separate network TTS request for a tiny opening such as "好，".
         # A short final reply is flushed by LAST, so it never waits indefinitely.
-        for pos,char in enumerate(current_text):
-            if char in punctuations_to_use and len(textUtils.get_string_no_punctuation_or_emoji(current_text[:pos+1]))>=minimum:
-                last_punct_pos=pos
+        for pos, char in enumerate(current_text):
+            # Keep the opening responsive. Later requests use already available
+            # clauses up to 80 characters instead of paying a handshake per clause.
+            if not self.is_first_sentence and pos >= 80 and last_punct_pos != -1:
                 break
+            if char in punctuations_to_use and len(textUtils.get_string_no_punctuation_or_emoji(current_text[:pos+1])) >= minimum:
+                last_punct_pos = pos
+                if self.is_first_sentence:
+                    break
 
         if last_punct_pos != -1:
             segment_text_raw = current_text[: last_punct_pos + 1]

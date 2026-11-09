@@ -376,6 +376,33 @@ class ConversationEngine:
             self._schedule_memory_save()
             return True
 
+        if depth == 0 and self.intent_type == "function_call" and hasattr(self, "func_handler"):
+            from core.news.followup import detail_search_query
+
+            news_query = detail_search_query(self, query)
+            if news_query and any(
+                tool.get("function", {}).get("name") == "web_search" for tool in (functions or [])
+            ):
+                self.logger.bind(tag=TAG).info("热榜条目追问：先执行 Tavily 联网查证")
+                tool_call = {
+                    "id": uuid.uuid4().hex,
+                    "name": "web_search",
+                    "arguments": json.dumps({"query": news_query}, ensure_ascii=False),
+                }
+                results = dispatch_tool_calls(self, [tool_call])
+                if results is None:
+                    return False
+                handle_tool_results(self, results, depth=0)
+                self.tts.tts_text_queue.put(
+                    TTSMessageDTO(
+                        sentence_id=current_sentence_id,
+                        sentence_type=SentenceType.LAST,
+                        content_type=ContentType.ACTION,
+                    )
+                )
+                self._schedule_memory_save()
+                return True
+
         response_message = []
 
         try:

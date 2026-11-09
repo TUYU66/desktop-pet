@@ -1,13 +1,43 @@
-import { useState } from 'react';
-import { Form, Input, Button, App, Tabs } from 'antd';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Form, Input, Button, App, Tabs, Alert } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import { login, register as registerApi } from '../../api/auth';
+import { login, register as registerApi, getRegistrationStatus } from '../../api/auth';
+import type { RegistrationState } from '../../api/auth';
 import { useUserStore } from '../../store/userStore';
 
 export default function Login() {
   const [loginLoading, setLoginLoading] = useState(false);
   const [registerLoading, setRegisterLoading] = useState(false);
+  const [registration, setRegistration] = useState<RegistrationState | null>(null);
+  const [statusLoading, setStatusLoading] = useState(true);
+  const [statusError, setStatusError] = useState('');
+  const [activeTab, setActiveTab] = useState('register');
+  const statusGeneration = useRef(0);
+  const refreshRegistration = useCallback(async () => {
+    const generation = ++statusGeneration.current;
+    setStatusLoading(true);
+    try {
+      const response = await getRegistrationStatus();
+      const state = response.data;
+      if (!state || typeof state.initialized !== 'boolean' || typeof state.registrationOpen !== 'boolean' ||
+          typeof state.accountConflict !== 'boolean' || (state.registrationOpen && (state.initialized || state.accountConflict))) {
+        throw new Error('账户初始化状态无效');
+      }
+      if (generation === statusGeneration.current) { setRegistration(state); setStatusError(''); }
+    } catch (error) {
+      if (generation === statusGeneration.current) {
+        setRegistration(null);
+        setStatusError(error instanceof Error ? error.message : '无法读取账户初始化状态');
+      }
+    } finally {
+      if (generation === statusGeneration.current) setStatusLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    void refreshRegistration();
+    return () => { ++statusGeneration.current; };
+  }, [refreshRegistration]);
   const { message } = App.useApp();
   const navigate = useNavigate();
   const setToken = useUserStore((s) => s.setToken);
@@ -36,18 +66,32 @@ export default function Login() {
   const handleRegister = async (values: any) => {
     setRegisterLoading(true);
     try {
-      await registerApi(values);
-      message.success('注册成功，请登录');
+      await registerApi({ username: values.username, password: values.password });
+      setRegistration({ initialized: true, registrationOpen: false, accountConflict: false });
+      setActiveTab('login');
+      message.success('账户初始化完成，请登录');
     } catch (err: any) {
       const msg = err?.response?.data?.msg || err?.message || '注册失败';
       message.error(msg);
     } finally {
+      await refreshRegistration();
       setRegisterLoading(false);
     }
   };
 
   return (
-    <Tabs
+    <>
+    {statusLoading && <Alert type="info" title="正在获取账户初始化状态…" style={{ marginBottom: 16 }} />}
+    {statusError && <Alert type="warning" showIcon title={statusError}
+      description="暂时无法确认是否允许首次注册，你仍可使用已有账户登录。"
+      action={<Button loading={statusLoading} onClick={() => void refreshRegistration()}>重试</Button>} style={{ marginBottom: 16 }} />}
+    {registration?.accountConflict && <Alert type="error" showIcon title="检测到多个账户，单用户配置异常"
+      description="注册已关闭，请联系维护者确认已有账户；系统不会自动删除账户。" style={{ marginBottom: 16 }} />}
+    {registration?.registrationOpen && <Alert type="info" showIcon title="首次使用，请先创建唯一账户"
+      description="创建成功后将关闭注册入口，此账户用于登录并管理你的机器人。" style={{ marginBottom: 16 }} />}
+    {!registration?.accountConflict && <Tabs
+      activeKey={registration?.registrationOpen ? activeTab : 'login'}
+      onChange={setActiveTab}
       centered
       size="large"
       items={[
@@ -70,9 +114,9 @@ export default function Login() {
             </Form>
           ),
         },
-        {
+        ...(registration?.registrationOpen ? [{
           key: 'register',
-          label: '注册',
+          label: '首次注册',
           children: (
             <Form layout="vertical" onFinish={handleRegister} size="large" style={{ marginTop: 8 }}>
               <Form.Item name="username" label="用户名" rules={[{ required: true, message: '请输入用户名' }]}>
@@ -109,13 +153,14 @@ export default function Login() {
               </Form.Item>
               <Form.Item style={{ marginBottom: 0 }}>
                 <Button type="primary" htmlType="submit" block loading={registerLoading} size="large">
-                  注册
+                  创建唯一账户
                 </Button>
               </Form.Item>
             </Form>
           ),
-        },
+        }] : []),
       ]}
-    />
+    />}
+    </>
   );
 }

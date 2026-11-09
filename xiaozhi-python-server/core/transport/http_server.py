@@ -9,6 +9,8 @@ from core.api.volume_handler import VolumeHandler
 from core.api.device_panel_handler import DevicePanelHandler
 from core.api.calibration_handler import CalibrationHandler
 from core.api.tuning_handler import TuningHandler
+from core.api.stm32_ota_handler import Stm32OtaHandler
+from core.api.esp32_ota_handler import Esp32OtaHandler
 from core.api.music_handler import MusicHandler
 from core.api.netease_handler import NeteaseHandler
 from core.device.wake_word import WakeWordSync
@@ -30,6 +32,10 @@ class SimpleHttpServer:
         self.device_panel_handler = DevicePanelHandler(ws_server)
         self.calibration_handler = CalibrationHandler(ws_server)
         self.tuning_handler = TuningHandler(ws_server)
+        self.stm32_ota_handler = Stm32OtaHandler(ws_server)
+        self.esp32_ota_handler = Esp32OtaHandler(ws_server)
+        if ws_server is not None:
+            ws_server.esp32_ota_handler = self.esp32_ota_handler
         self.music_handler = MusicHandler(config, ws_server)
         self.netease_handler = NeteaseHandler(config, ws_server, self.music_handler)
         self.wake_word_sync = WakeWordSync(config, ws_server)
@@ -79,6 +85,10 @@ class SimpleHttpServer:
                         web.get("/xiaozhi/device/tuning", self.tuning_handler.handle),
                         web.post("/xiaozhi/device/tuning", self.tuning_handler.handle),
                         web.get("/xiaozhi/device/panel", self.device_panel_handler.handle),
+                        web.get("/xiaozhi/device/esp32-ota", self.esp32_ota_handler.handle),
+                        web.post("/xiaozhi/device/esp32-ota", self.esp32_ota_handler.handle),
+                        web.get("/xiaozhi/device/stm32-ota", self.stm32_ota_handler.handle),
+                        web.post("/xiaozhi/device/stm32-ota", self.stm32_ota_handler.handle),
                         web.post("/xiaozhi/device/panel", self.device_panel_handler.handle),
                         web.get("/xiaozhi/device/volume", self.volume_handler.handle),
                         web.put("/xiaozhi/device/volume", self.volume_handler.handle),

@@ -147,10 +147,15 @@ async def say(conn, text, standby=None, sentence_id=None):
             content_type=ContentType.TEXT if content else ContentType.ACTION, content_detail=content))
 
 
-async def handle_input(conn, text, web=False):
+async def handle_input(conn, text, web=False, asr_reported=False):
     """Return (handled, response/original deferred question). No LLM invents tracks."""
     from core.reporting.chat_reports import enqueue_asr_report, enqueue_tts_report
     from core.conversation.standby import exit_requested
+    def report_input():
+        # Voice ingress owns its report; direct/web callers still report here.
+        if not asr_reported:
+            enqueue_asr_report(conn, text, [])
+
     if exit_requested(text):
         conn.music_chat_pending=None
         await pause_for_chat(conn,for_chat=False)
@@ -169,7 +174,7 @@ async def handle_input(conn, text, web=False):
     if (web and current and current.state in ('playing', 'loading') and normalized in
             ('不要暂停音乐', '别暂停音乐', '先不要暂停音乐', '不要停止音乐', '别停止音乐')):
         answer = '好的，继续播放音乐。'
-        enqueue_asr_report(conn, text, [])
+        report_input()
         enqueue_tts_report(conn, answer, [])
         from core.reminders.followup import deliver
         conn.task_followup_sentence = conn.sentence_id
@@ -187,7 +192,7 @@ async def handle_input(conn, text, web=False):
             text = '继续播放'
         else:
             answer = '好的，继续播放音乐。'
-            enqueue_asr_report(conn, text, [])
+            report_input()
             enqueue_tts_report(conn, answer, [])
             return True, answer
     compound = split_music_request(text)
@@ -241,7 +246,7 @@ async def handle_input(conn, text, web=False):
                 from core.conversation.feedback import failure_feedback
                 conn.logger.bind(tag=__name__).warning('音乐操作没有完成: {}', str(exc))
                 answer = failure_feedback(str(exc))
-            enqueue_asr_report(conn, text, [])
+            report_input()
             await say(conn, answer, sentence_id=sentence)
             return True, answer
         finally:
@@ -254,7 +259,7 @@ async def handle_input(conn, text, web=False):
     if music_context:
         conn.music_chat_pending = {'text': text, 'at': time.monotonic(), 'session': conn.session_id}
         answer = '要先停一下音乐聊一会儿吗？想继续听也可以告诉我。'
-        enqueue_asr_report(conn, text, [])
+        report_input()
         await say(conn, answer, standby=False)
         return True, answer
     return False, text

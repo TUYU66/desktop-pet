@@ -78,7 +78,11 @@ async def search(conn, query):
                      and current and pending['turnId'] in (current[0], current[3]))
     if not valid_pending:
         pending = None
-    authorized = current and current[2] and _explicit(current[1])
+    from core.news.followup import detail_search_query
+    news_query = detail_search_query(conn, current[1]) if current and current[2] else None
+    if news_query:
+        query = news_query
+    authorized = current and current[2] and (_explicit(current[1]) or bool(news_query))
     confirmed = current and current[2] and AFFIRM.fullmatch(current[1].strip()) and ASK.search(previous)
     if confirmed and valid_pending and current[0] != pending['turnId']:
         query = pending['query']
@@ -99,7 +103,7 @@ async def search(conn, query):
     request_id = uuid.uuid4().hex[:12]
     try:
         logger.bind(tag=TAG).info('Web Search 已授权: request_id={}, authorization={}', request_id,
-                                 'confirmation' if confirmed else 'explicit_request')
+                                 'news_detail_followup' if news_query else ('confirmation' if confirmed else 'explicit_request'))
         data = await search_evidence(_config(conn), query, request_id)
         latest, _ = _context(conn)
         if getattr(conn, 'session_id', None) != session or not latest or latest[0] != current[0]:

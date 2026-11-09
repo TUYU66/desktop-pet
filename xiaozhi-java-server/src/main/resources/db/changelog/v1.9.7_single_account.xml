@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+    <changeSet id="1.9.7-single-account-initialization" author="desktop-pet">
+        <comment>Serialize first registration without modifying existing accounts.</comment>
+        <createTable tableName="account_initialization_guard">
+            <column name="id" type="int"><constraints primaryKey="true" nullable="false"/></column>
+        </createTable>
+        <insert tableName="account_initialization_guard"><column name="id" valueNumeric="1"/></insert>
+    </changeSet>
+</databaseChangeLog>

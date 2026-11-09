@@ -47,7 +47,7 @@ export default function Account() {
 
   return (
     <div className="utility-page account-page page-width">
-      <div className="page-heading"><div><h1>账号管理</h1><p>查看账号信息，管理登录密码。</p></div></div>
+      <div className="page-heading"><div><h1>账号管理</h1></div></div>
 
       <Card
         style={{ marginBottom: 24, borderRadius: 16, border: 'none', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}

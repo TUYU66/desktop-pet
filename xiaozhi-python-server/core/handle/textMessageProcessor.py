@@ -31,9 +31,21 @@ class TextMessageProcessor:
                 if message_type != "mcp":
                     conn.logger.bind(tag=TAG).info(f"收到{message_type}消息：{message}")
 
+                if message_type == "ota_progress":
+                    server = getattr(conn, "server", None)
+                    handler = getattr(server, "esp32_ota_handler", None)
+                    if handler:
+                        handler.accept_progress(conn, msg_json)
+                    return
+
                 if message_type == "wake_word_config_result":
                     from core.device.wake_word import accept_ack
                     accept_ack(conn, msg_json)
+                    return
+
+                if message_type in ('bluetooth_control', 'bluetooth_control_cancel'):
+                    from core.device.bluetooth_notice import handle_event
+                    await handle_event(conn, msg_json)
                     return
 
                 # 获取并执行处理器

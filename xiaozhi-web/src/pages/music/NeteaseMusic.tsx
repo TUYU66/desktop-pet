@@ -200,7 +200,7 @@ export default function NeteaseMusic({ deviceId, state, busy, play, librarySourc
         onClick={() => void download(track)}>{downloadedIds.includes(track.id.replace('netease:', '')) ? '已下载' : '下载到本地'}</Button>
     </div>)}</div>;
   return <div className="netease-panel">
-    <div className="netease-account"><div><h2>网易云账号</h2><p>连接账号，查看歌单与查找平台歌曲。</p></div>
+    <div className="netease-account"><div><h2>网易云账号</h2></div>
       <Space wrap>{account?.loggedIn && account.profile && <><Avatar src={account.profile.avatar} /><span>{account.profile.nickname}</span><Tag color="green">已连接</Tag></>}
         <Button icon={<ReloadOutlined />} loading={accountLoading} disabled={accountLoading} onClick={() => void reloadAccount()}>刷新账号与歌单</Button>
         {account?.loggedIn ? <Popconfirm title="退出网易云账号？" description="停止网易云播放并清除本机登录信息，本地音乐可继续使用。" onConfirm={logout} okText="退出" cancelText="取消">
@@ -213,7 +213,7 @@ export default function NeteaseMusic({ deviceId, state, busy, play, librarySourc
     {renderPlayer(accountLoading, !!account?.loggedIn)}
     {account?.loggedIn && (view === 'library' || librarySource === 'local') && <>
       <section className="music-library netease-search" aria-label="网易云点歌">
-        <h3>按歌名或歌手点歌</h3><p className="music-hint">任选一项即可查询，两项一起填写可缩小范围。聊天点歌先查本地，没有再搜索网易云。可说“查找歌名晴天”“我想听周杰伦的晴天”，有多个匹配时再说“播放第二首”。</p>
+        <h3>按歌名或歌手点歌</h3>
         <Form form={form} layout="vertical" onFinish={values => void search(values)} className="netease-search-form">
           <Form.Item name="artist" label="歌手（选填）" rules={[{ max: 100, message: '最多100字' }]}><Input placeholder="例如：周杰伦" maxLength={100} allowClear /></Form.Item>
           <Form.Item name="title" label="歌名（选填）" dependencies={['artist']} rules={[{ max: 100, message: '最多100字' },

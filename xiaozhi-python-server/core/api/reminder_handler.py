@@ -15,6 +15,24 @@ class ReminderHandler:
         self.attempts={}
         self.batch_attempts={}
 
+    def _make_room(self):
+        """Only evict completed attempts proven not to have sent any audio."""
+        if len(self.attempts) < 512:
+            return True
+        for key, (_, _, task) in list(self.attempts.items()):
+            if not task.done() or task.cancelled() or task.exception() is not None:
+                continue
+            outcome = task.result()
+            unsent = outcome == 'retry' or (
+                isinstance(outcome, dict) and bool(outcome)
+                and all(value == 'retry' for value in outcome.values()))
+            if unsent:
+                del self.attempts[key]
+                self.batch_attempts = {member: parent for member, parent in self.batch_attempts.items()
+                                       if parent != key}
+                return True
+        return False
+
     @staticmethod
     def validate_item(body):
         if not isinstance(body,dict): raise ValueError()
@@ -65,7 +83,7 @@ class ReminderHandler:
             # A member attempt cannot be replayed in a different batch or as a single request.
             if attempt in self.batch_attempts or batch and any(i['attemptId'] in self.attempts or i['attemptId'] in self.batch_attempts for i in items):
                 return web.json_response({'code':409,'msg':'提醒发送标识已使用'},status=409)
-            if len(self.attempts)>=512:
+            if not self._make_room():
                 return web.json_response({'code':0,**({'outcomes':{i['attemptId']:'retry' for i in items}} if batch else {'outcome':'retry'})})
             if batch:
                 task=asyncio.create_task(self.deliver_batch(device,items,attempt))

@@ -7,6 +7,7 @@ set(SOURCES
     "boards/bread-compact-wifi-lcd/stm32_link_protocol.cc"
     "boards/bread-compact-wifi-lcd/stm32_link_tuning.cc"
     "boards/bread-compact-wifi-lcd/stm32_link_motion.cc"
+    "boards/bread-compact-wifi-lcd/stm32_link_ota.cc"
     "boards/bread-compact-wifi-lcd/stm32_link_receive.cc"
     "audio/audio_codec.cc"
     "audio/audio_service.cc"
@@ -87,15 +88,6 @@ file(GLOB LANG_SOUNDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/locales/${LANG_DIR}/*.o
 # 简体中文资源完整，不再嵌入其他语言作为回退。
 
 file(GLOB COMMON_SOUNDS ${CMAKE_CURRENT_SOURCE_DIR}/assets/common/*.ogg)
-# Keep the Bluetooth prompts explicit: an existing build directory may have
-# been configured before these files were added, so globbing alone misses them.
-foreach(BT_PROMPT bt_app_on bt_app_off bt_app_ready bt_app_failed)
-    set(BT_PROMPT_FILE "${CMAKE_CURRENT_LIST_DIR}/assets/common/${BT_PROMPT}.ogg")
-    if(NOT EXISTS "${BT_PROMPT_FILE}")
-        message(FATAL_ERROR "Missing Bluetooth prompt: ${BT_PROMPT_FILE}")
-    endif()
-    list(APPEND COMMON_SOUNDS "${BT_PROMPT_FILE}")
-endforeach()
 list(REMOVE_DUPLICATES COMMON_SOUNDS)
 
 set(MAIN_PRIV_REQUIRES_EXTRA "")

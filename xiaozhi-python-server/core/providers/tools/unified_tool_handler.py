@@ -10,7 +10,6 @@ from plugins_func.register import Action, ActionResponse
 from .unified_tool_manager import ToolManager
 from .server_plugins import ServerPluginExecutor
 from .server_mcp import ServerMCPExecutor
-from .device_iot import DeviceIoTExecutor
 from .device_mcp import DeviceMCPExecutor
 from core.handle.sendAudioHandle import send_display_message
 
@@ -29,7 +28,6 @@ class UnifiedToolHandler:
         # 创建各类执行器
         self.server_plugin_executor = ServerPluginExecutor(conn)
         self.server_mcp_executor = ServerMCPExecutor(conn)
-        self.device_iot_executor = DeviceIoTExecutor(conn)
         self.device_mcp_executor = DeviceMCPExecutor(conn)
 
         # 注册执行器
@@ -38,9 +36,6 @@ class UnifiedToolHandler:
         )
         self.tool_manager.register_executor(
             ToolType.SERVER_MCP, self.server_mcp_executor
-        )
-        self.tool_manager.register_executor(
-            ToolType.DEVICE_IOT, self.device_iot_executor
         )
         self.tool_manager.register_executor(
             ToolType.DEVICE_MCP, self.device_mcp_executor
@@ -201,11 +196,6 @@ class UnifiedToolHandler:
             response="; ".join(responses_text) if responses_text else None,
         )
 
-    async def register_iot_tools(self, descriptors: List[Dict[str, Any]]):
-        """注册IoT设备工具"""
-        self.device_iot_executor.register_iot_tools(descriptors)
-        self.tool_manager.refresh_tools()
-        self.logger.info(f"注册了{len(descriptors)}个IoT设备的工具")
 
     def get_tool_statistics(self) -> Dict[str, int]:
         """获取工具统计信息"""

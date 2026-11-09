@@ -4,6 +4,10 @@ import com.xiaozhi.modules.user.entity.UserEntity;
 
 public interface UserService {
 
+    record RegistrationState(boolean initialized, boolean registrationOpen, boolean accountConflict) {}
+
+    RegistrationState registrationState();
+
     UserEntity findByUsername(String username);
 
     UserEntity findById(Long id);

@@ -30,7 +30,7 @@ enum ReplyCode {
     kNotStable,
     kUnknownError,
 };
-void InterruptBluetoothPrompt();
+void CancelBluetoothAnnouncement();
 int WriteFrame(const char* payload);
 int EstimateBatteryPercent(int millivolts);
 bool ParseFields(const char* text, int64_t* fields, size_t count);

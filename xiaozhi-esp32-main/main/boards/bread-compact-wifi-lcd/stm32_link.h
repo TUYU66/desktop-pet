@@ -21,6 +21,8 @@ public:
     bool GetBatteryLevel(int& percent) const;
     bool GetLowBattery(bool& low) const;
     bool IsConnected() const { return LinkFresh(); }
+    void OnBluetoothSpeechResult(unsigned int id, bool played);
+    int GetBluetoothControlState() const; // -1=unknown, 0=off, 1=on; fresh STM32 feedback only.
     std::string GetMotionHint(bool& busy) const;
     std::string GetCalibrationJson() const;
     std::string RequestCalibration(const std::string& operation, int wheel, int pwm, bool confirmed, unsigned int expected_session, unsigned int sample_tick);
@@ -33,16 +35,33 @@ public:
     std::string RequestTurnLeft();
     std::string RequestTurnRight();
     std::string RequestTurnAround();
+    std::string StartOta(const std::string& job, const std::string& url, const std::string& metadata);
+    std::string GetOtaStateJson() const;
 
 private:
     static void TaskEntry(void* context);
     void Poll();
     void ProcessLine(const char* line);
     void FeedByte(uint8_t byte);
-    std::string RequestMotion(const char* command, unsigned int app_request = 0);
+    std::string RequestMotion(const char* command, unsigned int app_request = 0, bool for_update = false);
+    struct OtaWork;
+    static void OtaTask(void* context);
+    void RunOta(const OtaWork& work);
+    void OtaProgress(const char* phase, int progress, const std::string& error = "");
+    std::atomic<bool> ota_running_{false}, ota_exclusive_{false};
+    std::atomic<bool> ota_supported_{false};
+    std::atomic<int> boot_recovery_state_{-1};
+    std::atomic<TickType_t> boot_recovery_tick_{0};
+    int BootRecoveryState() const;
+    mutable std::mutex ota_mutex_;
+    std::string ota_job_, ota_phase_{"idle"}, ota_error_, ota_version_;
+    int ota_progress_{0};
+    std::atomic<uint32_t> installed_ota_version_{0};
+    std::atomic<TickType_t> installed_ota_tick_{0};
     struct AppBluetoothRequest { unsigned int id; bool enabled; };
     static void AppBluetoothTask(void* context);
     void RunAppBluetooth(const AppBluetoothRequest& request);
+    bool AnnounceAppBluetooth(const AppBluetoothRequest& request, bool success);
     void SendAppBluetoothResult(unsigned int id, bool success);
     QueueHandle_t app_bluetooth_queue_{nullptr};
     std::atomic<unsigned int> app_bluetooth_id_{0};
@@ -105,6 +124,9 @@ private:
     int motion_phase_{-1};
     int motion_error_{0};
     int motion_rest_{0};
+    int posture_state_{0};
+    bool posture_seen_{false};
+    TickType_t posture_tick_{0};
     bool motion_stopped_{true}; // DIAG,M sample; protected by motion_mutex_.
     bool motion_seen_{false};
     SemaphoreHandle_t uart_mutex_{nullptr};

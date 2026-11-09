@@ -156,17 +156,18 @@ def reminder_announcement(item, index=0, count=1):
 
 def chassis_acknowledgement(name, user_text=''):
     return {
-        'self_chassis_stand_up':'好，这就起来。',
+        'self_chassis_stand_up':'好。',
         'self_chassis_turn_left':'好，往左转一下。',
         'self_chassis_turn_right':'好，往右转一下。',
         'self_chassis_turn_around':'好，转个身。',
-        'self_chassis_bluetooth_on':'进入蓝牙控制模式，准备好后就可以用 App 控制我了。',
+        'self_chassis_bluetooth_on':'好。',
     }.get(name, '好，坐下来歇会儿。' if '坐' in user_text else '好，我靠回去歇会儿。')
 
 
 def chassis_outcome(name, raw):
     # Only exact, confirmed firmware receipts can become a completion promise.
     known={
+        ('self_chassis_bluetooth_on','已经站稳，蓝牙控制已开启，可以用手机 App 操控了。'):'已准备好，请打开 App 连接机器人。',
         ('self_chassis_stand_up','起立完成。'):'站起来啦。',
         ('self_chassis_rest','休息完成。'):'好，坐好了。',
         ('self_chassis_turn_left','好，我向左转过来啦。'):'好，转过来啦。',

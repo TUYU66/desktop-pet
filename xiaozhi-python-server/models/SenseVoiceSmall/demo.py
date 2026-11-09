@@ -24,3 +24,4 @@ res = model.generate(
 )
 text = rich_transcription_postprocess(res[0]["text"])
 print(text)
+

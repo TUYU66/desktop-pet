@@ -400,3 +400,75 @@ void LcdDisplay::ApplyEyesStyle() {
     }
     // Keep the subtitle layout and scrolling mode configured by SetupUI().
 }
+
+// 独立遮罩不依赖聊天字幕，待命时钟、表情和网络状态更新不会覆盖升级提示。
+void LcdDisplay::SetUpgradeProgress(const char* target, const char* phase, int progress) {
+    if (!setup_ui_called_ || !display_ || !target || !phase) return;
+    DisplayLockGuard lock(this);
+    // ESP32 自身正在刷写时优先显示自身状态，避免另一条链路覆盖画面。
+    if (upgrade_target_ == "ESP32" && strcmp(target, "ESP32") != 0) return;
+    const bool completed = strcmp(phase, "completed") == 0;
+    const bool failed = strcmp(phase, "failed") == 0;
+    if ((completed || failed) && upgrade_target_ != target) return;
+    if (upgrade_finish_timer_) {
+        lv_timer_delete(upgrade_finish_timer_);
+        upgrade_finish_timer_ = nullptr;
+    }
+    upgrade_target_ = target;
+    if (!upgrade_panel_) {
+        upgrade_panel_ = lv_obj_create(lv_display_get_screen_active(display_));
+        lv_obj_remove_style_all(upgrade_panel_);
+        lv_obj_set_size(upgrade_panel_, width_, height_);
+        lv_obj_center(upgrade_panel_);
+        lv_obj_set_style_bg_color(upgrade_panel_, lv_color_hex(0x101820), 0);
+        lv_obj_set_style_bg_opa(upgrade_panel_, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(upgrade_panel_, lv_color_hex(0xFFFFFF), 0);
+        auto theme = static_cast<LvglTheme*>(current_theme_);
+        lv_obj_set_style_text_font(upgrade_panel_, theme->text_font()->font(), 0);
+        lv_obj_remove_flag(upgrade_panel_, LV_OBJ_FLAG_SCROLLABLE);
+        auto label = [this](int y) {
+            auto obj = lv_label_create(upgrade_panel_);
+            lv_obj_set_width(obj, width_ - 24);
+            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, 0);
+            lv_obj_align(obj, LV_ALIGN_TOP_MID, 0, y);
+            return obj;
+        };
+        upgrade_title_ = label(height_ / 5);
+        upgrade_detail_ = label(height_ * 2 / 5);
+        upgrade_progress_ = lv_bar_create(upgrade_panel_);
+        lv_obj_set_size(upgrade_progress_, width_ - 48, 10);
+        lv_obj_align(upgrade_progress_, LV_ALIGN_TOP_MID, 0, height_ * 3 / 5);
+        lv_bar_set_range(upgrade_progress_, 0, 100);
+        lv_obj_set_style_bg_color(upgrade_progress_, lv_color_hex(0x253342), LV_PART_MAIN);
+        lv_obj_set_style_bg_color(upgrade_progress_, lv_color_hex(0x5CAEFF), LV_PART_INDICATOR);
+        upgrade_hint_ = label(height_ * 4 / 5);
+    }
+    lv_obj_remove_flag(upgrade_panel_, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_move_foreground(upgrade_panel_);
+    std::string title = upgrade_target_ + (completed ? " 升级完成" : failed ? " 升级未完成" : " 升级中");
+    lv_label_set_text(upgrade_title_, title.c_str());
+    const char* stage = "准备升级";
+    if (strcmp(phase, "downloading") == 0) stage = "下载固件";
+    else if (strcmp(phase, "preparing") == 0) stage = "准备底盘";
+    else if (strcmp(phase, "bootloader") == 0) stage = "进入升级程序";
+    else if (strcmp(phase, "recovering") == 0) stage = "恢复安装";
+    else if (strcmp(phase, "transferring") == 0) stage = "传输固件";
+    else if (strcmp(phase, "installing") == 0) stage = "安装固件";
+    else if (strcmp(phase, "verifying") == 0) stage = "确认设备启动";
+    char detail[96];
+    snprintf(detail, sizeof(detail), "%s  %d%%", stage, std::max(0, std::min(100, progress)));
+    lv_label_set_text(upgrade_detail_, completed ? "固件已更新" :
+        failed ? "请在网页查看结果" : detail);
+    lv_bar_set_value(upgrade_progress_, std::max(0, std::min(100, progress)), LV_ANIM_OFF);
+    lv_label_set_text(upgrade_hint_, completed || failed ? "" : "请勿断电");
+    if (completed || failed) {
+        // LVGL 定时器与对象共用显示锁；新升级会取消旧定时器，避免误隐藏。
+        upgrade_finish_timer_ = lv_timer_create([](lv_timer_t* timer) {
+            auto self = static_cast<LcdDisplay*>(lv_timer_get_user_data(timer));
+            lv_obj_add_flag(self->upgrade_panel_, LV_OBJ_FLAG_HIDDEN);
+            self->upgrade_target_.clear();
+            self->upgrade_finish_timer_ = nullptr;
+            lv_timer_delete(timer);
+        }, 3000, this);
+    }
+}

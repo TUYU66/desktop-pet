@@ -1,3 +1,4 @@
+/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file    tim.c
@@ -6,17 +7,16 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
-
+/* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "tim.h"
 
@@ -233,37 +233,6 @@ void MX_TIM8_Init(void)
 
 }
 
-void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
-{
-
-  if(tim_baseHandle->Instance==TIM6)
-  {
-  /* USER CODE BEGIN TIM6_MspInit 0 */
-
-  /* USER CODE END TIM6_MspInit 0 */
-    /* TIM6 clock enable */
-    __HAL_RCC_TIM6_CLK_ENABLE();
-
-    /* TIM6 interrupt Init */
-    HAL_NVIC_SetPriority(TIM6_IRQn, 3, 2);
-    HAL_NVIC_EnableIRQ(TIM6_IRQn);
-  /* USER CODE BEGIN TIM6_MspInit 1 */
-
-  /* USER CODE END TIM6_MspInit 1 */
-  }
-  else if(tim_baseHandle->Instance==TIM8)
-  {
-  /* USER CODE BEGIN TIM8_MspInit 0 */
-
-  /* USER CODE END TIM8_MspInit 0 */
-    /* TIM8 clock enable */
-    __HAL_RCC_TIM8_CLK_ENABLE();
-  /* USER CODE BEGIN TIM8_MspInit 1 */
-
-  /* USER CODE END TIM8_MspInit 1 */
-  }
-}
-
 void HAL_TIM_Encoder_MspInit(TIM_HandleTypeDef* tim_encoderHandle)
 {
 
@@ -313,6 +282,37 @@ void HAL_TIM_Encoder_MspInit(TIM_HandleTypeDef* tim_encoderHandle)
   /* USER CODE END TIM4_MspInit 1 */
   }
 }
+
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
+{
+
+  if(tim_baseHandle->Instance==TIM6)
+  {
+  /* USER CODE BEGIN TIM6_MspInit 0 */
+
+  /* USER CODE END TIM6_MspInit 0 */
+    /* TIM6 clock enable */
+    __HAL_RCC_TIM6_CLK_ENABLE();
+
+    /* TIM6 interrupt Init */
+    HAL_NVIC_SetPriority(TIM6_IRQn, 7, 0);
+    HAL_NVIC_EnableIRQ(TIM6_IRQn);
+  /* USER CODE BEGIN TIM6_MspInit 1 */
+
+  /* USER CODE END TIM6_MspInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM8)
+  {
+  /* USER CODE BEGIN TIM8_MspInit 0 */
+
+  /* USER CODE END TIM8_MspInit 0 */
+    /* TIM8 clock enable */
+    __HAL_RCC_TIM8_CLK_ENABLE();
+  /* USER CODE BEGIN TIM8_MspInit 1 */
+
+  /* USER CODE END TIM8_MspInit 1 */
+  }
+}
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
 {
 
@@ -340,36 +340,6 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef* timHandle)
   /* USER CODE END TIM8_MspPostInit 1 */
   }
 
-}
-
-void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
-{
-
-  if(tim_baseHandle->Instance==TIM6)
-  {
-  /* USER CODE BEGIN TIM6_MspDeInit 0 */
-
-  /* USER CODE END TIM6_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_TIM6_CLK_DISABLE();
-
-    /* TIM6 interrupt Deinit */
-    HAL_NVIC_DisableIRQ(TIM6_IRQn);
-  /* USER CODE BEGIN TIM6_MspDeInit 1 */
-
-  /* USER CODE END TIM6_MspDeInit 1 */
-  }
-  else if(tim_baseHandle->Instance==TIM8)
-  {
-  /* USER CODE BEGIN TIM8_MspDeInit 0 */
-
-  /* USER CODE END TIM8_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_TIM8_CLK_DISABLE();
-  /* USER CODE BEGIN TIM8_MspDeInit 1 */
-
-  /* USER CODE END TIM8_MspDeInit 1 */
-  }
 }
 
 void HAL_TIM_Encoder_MspDeInit(TIM_HandleTypeDef* tim_encoderHandle)
@@ -413,8 +383,37 @@ void HAL_TIM_Encoder_MspDeInit(TIM_HandleTypeDef* tim_encoderHandle)
   }
 }
 
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
+{
+
+  if(tim_baseHandle->Instance==TIM6)
+  {
+  /* USER CODE BEGIN TIM6_MspDeInit 0 */
+
+  /* USER CODE END TIM6_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM6_CLK_DISABLE();
+
+    /* TIM6 interrupt Deinit */
+    HAL_NVIC_DisableIRQ(TIM6_IRQn);
+  /* USER CODE BEGIN TIM6_MspDeInit 1 */
+
+  /* USER CODE END TIM6_MspDeInit 1 */
+  }
+  else if(tim_baseHandle->Instance==TIM8)
+  {
+  /* USER CODE BEGIN TIM8_MspDeInit 0 */
+
+  /* USER CODE END TIM8_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM8_CLK_DISABLE();
+  /* USER CODE BEGIN TIM8_MspDeInit 1 */
+
+  /* USER CODE END TIM8_MspDeInit 1 */
+  }
+}
+
 /* USER CODE BEGIN 1 */
 
 /* USER CODE END 1 */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

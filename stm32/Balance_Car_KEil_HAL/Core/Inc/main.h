@@ -92,6 +92,7 @@ void Error_Handler(void);
 #define bluetooth_RX_GPIO_Port GPIOD
 #define LED_Pin GPIO_PIN_3
 #define LED_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
@@ -101,5 +102,3 @@ void Error_Handler(void);
 #endif
 
 #endif /* __MAIN_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

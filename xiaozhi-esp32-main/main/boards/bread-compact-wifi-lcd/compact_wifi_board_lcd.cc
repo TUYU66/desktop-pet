@@ -82,6 +82,12 @@ private:
 
     void InitializeTools() {
         auto& mcp = McpServer::GetInstance();
+        mcp.AddUserOnlyTool("self.chassis.ota_state", "Operator-only STM32 upgrade status.",
+            PropertyList(), [](const PropertyList&) -> ReturnValue {return Stm32Link::GetInstance().GetOtaStateJson();});
+        mcp.AddUserOnlyTool("self.chassis.ota_start", "Operator-only STM32 upgrade. Never a conversational tool.",
+            PropertyList({Property("job_id", kPropertyTypeString),Property("url", kPropertyTypeString),Property("metadata", kPropertyTypeString)}),
+            [](const PropertyList& p) -> ReturnValue {return Stm32Link::GetInstance().StartOta(
+                p["job_id"].value<std::string>(),p["url"].value<std::string>(),p["metadata"].value<std::string>());});
         mcp.AddTool("self.dashboard.get_state", "Read actual voice wake/standby mode and fresh chassis posture, plus control panel state. This is read-only. Wake mode and standing/seated posture are independent; unknown or moving posture is not a completed action.",
             PropertyList(), [this](const PropertyList&) -> ReturnValue {
                 return "{\"deviceState\":" + std::to_string(static_cast<int>(Application::GetInstance().GetDeviceState())) +
@@ -183,6 +189,12 @@ private:
 
 public:
     bool UsesBatteryProtectionFlag() const override { return true; }
+    void OnBluetoothSpeechResult(unsigned int id, bool played) override { Stm32Link::GetInstance().OnBluetoothSpeechResult(id, played); }
+    int GetBluetoothControlState() const override { return Stm32Link::GetInstance().GetBluetoothControlState(); }
+    std::string GetChassisOtaInfo() override { return Stm32Link::GetInstance().GetOtaStateJson(); }
+    void StartChassisAutoUpgrade(const std::string& url, const std::string& metadata) override {
+        Stm32Link::GetInstance().StartOta("auto-" + std::to_string(esp_timer_get_time()), url, metadata);
+    }
     bool IsChassisConnected() const override { return Stm32Link::GetInstance().IsConnected(); }
 
     bool GetLowBatteryFlag(bool& low) override {

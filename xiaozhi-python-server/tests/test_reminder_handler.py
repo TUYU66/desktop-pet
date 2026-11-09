@@ -4,6 +4,7 @@ import json
 import threading
 import unittest
 import uuid
+import time
 from types import SimpleNamespace as NS
 from unittest.mock import AsyncMock, Mock, patch
 from core.api.reminder_handler import ReminderHandler
@@ -16,13 +17,52 @@ def request(body=None,remote="127.0.0.1",key="test-reminder-private"):
 def connection():
     conn=NS(stop_event=threading.Event(),chat_lock=threading.Lock(),standby=True,
         client_is_speaking=False,client_abort=False,sentence_id="old",session_id="synthetic-session",features={"standby_connection":True},
-        config={},conn_from_mqtt_gateway=False,websocket=NS(send=AsyncMock()),logger=Mock(),
+        config={},websocket=NS(send=AsyncMock()),logger=Mock(),
         tts=NS(to_tts=Mock(return_value=[b"synthetic-opus"]),tts_audio_first_sentence=True),reset_audio_states=Mock())
     conn.clearSpeakStatus=lambda: setattr(conn,"client_is_speaking",False)
     return conn
 
 
 class ReminderHandlerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_full_retry_cache_allows_recovered_device_and_keeps_dedup(self):
+        for _ in range(512):
+            task = asyncio.get_running_loop().create_future()
+            task.set_result('retry')
+            self.api.attempts[str(uuid.uuid4())] = (time.monotonic(), (), task)
+        self.api.deliver = AsyncMock(return_value='sent')
+        body = dict(attemptId=str(uuid.uuid4()), deviceId='target', text='喝水')
+        first = await self.api.handle_announce(request(body))
+        second = await self.api.handle_announce(request(body))
+        self.assertEqual('sent', json.loads(first.text)['outcome'])
+        self.assertEqual('sent', json.loads(second.text)['outcome'])
+        self.api.deliver.assert_awaited_once()
+        self.assertEqual(512, len(self.api.attempts))
+
+    async def test_pressure_does_not_evict_sent_unknown_running_or_partial_batch(self):
+        outcomes = ['sent', 'unknown', {'a': 'retry', 'b': 'sent'}, {'a': 'retry', 'b': 'unknown'}]
+        for index in range(512):
+            task = asyncio.get_running_loop().create_future()
+            if index % 5 != 4:
+                task.set_result(outcomes[index % 5])
+            self.api.attempts[str(uuid.uuid4())] = (time.monotonic(), (), task)
+        keys = set(self.api.attempts)
+        self.api.deliver = AsyncMock(return_value='sent')
+        body = dict(attemptId=str(uuid.uuid4()), deviceId='target', text='喝水')
+        result = await self.api.handle_announce(request(body))
+        self.assertEqual('retry', json.loads(result.text)['outcome'])
+        self.api.deliver.assert_not_awaited()
+        self.assertEqual(keys, set(self.api.attempts))
+
+    async def test_evicted_unsent_batch_removes_its_member_index(self):
+        for index in range(512):
+            task = asyncio.get_running_loop().create_future()
+            task.set_result({'member': 'retry'} if index == 0 else 'sent')
+            self.api.attempts[str(index)] = (time.monotonic(), (), task)
+        self.api.batch_attempts['member'] = '0'
+        self.assertTrue(self.api._make_room())
+        self.assertNotIn('member', self.api.batch_attempts)
+        self.assertNotIn('0', self.api.attempts)
+
     def setUp(self):
         self.env=patch.dict("os.environ",{"XIAOZHI_REMINDER_SERVICE_KEY":"test-reminder-private"}); self.env.start(); self.addCleanup(self.env.stop)
         self.conn=connection(); self.api=ReminderHandler(NS(device_handlers={"target":self.conn}))

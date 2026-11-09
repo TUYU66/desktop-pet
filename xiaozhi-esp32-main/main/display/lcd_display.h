@@ -21,8 +21,16 @@ protected:
     esp_lcd_panel_handle_t panel_ = nullptr;
     
     lv_draw_buf_t draw_buf_;
+    lv_obj_t* upgrade_panel_ = nullptr;
+    lv_obj_t* upgrade_title_ = nullptr;
+    lv_obj_t* upgrade_detail_ = nullptr;
+    lv_obj_t* upgrade_progress_ = nullptr;
+    lv_obj_t* upgrade_hint_ = nullptr;
+    lv_timer_t* upgrade_finish_timer_ = nullptr;
+    std::string upgrade_target_;
     lv_obj_t* top_bar_ = nullptr;
     lv_obj_t* battery_percent_label_ = nullptr;
+    lv_obj_t* bluetooth_icon_label_ = nullptr;
     lv_obj_t* status_bar_ = nullptr;
     lv_obj_t* content_ = nullptr;
     lv_obj_t* container_ = nullptr;
@@ -64,6 +72,7 @@ public:
     bool SetFaceColors(int eye_color, int mouth_color);
     void SetConnecting(bool connecting) override;
     virtual void SetStatus(const char* status) override;
+    void SetUpgradeProgress(const char* target, const char* phase, int progress) override;
     void UpdateStatusBar(bool update_all = false) override;
     virtual void SetChatMessage(const char* role, const char* content) override;
     void BeginAssistantResponse() override;

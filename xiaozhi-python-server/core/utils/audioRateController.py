@@ -23,6 +23,7 @@ class AudioRateController:
         self.play_position = 0  # 虚拟播放位置（毫秒）
         self.start_timestamp = None  # 开始时间戳（只读，不修改）
         self.pending_send_task = None
+        self.sending_stopped = False
         self.send_error = None
         self.logger = logger
         self.queue_empty_event = asyncio.Event()  # 队列清空事件
@@ -32,6 +33,7 @@ class AudioRateController:
 
     def reset(self):
         """重置控制器状态"""
+        self.sending_stopped = True
         if self.pending_send_task and not self.pending_send_task.done():
             self.pending_send_task.cancel()
             # 取消任务后，任务会在下次事件循环时清理，无需阻塞等待
@@ -177,11 +179,16 @@ class AudioRateController:
                     self.send_error = e
                 self.logger.bind(tag=TAG).error(f"音频发送循环异常: {e}")
 
+        self.sending_stopped = False
         self.pending_send_task = asyncio.create_task(_send_loop())
         return self.pending_send_task
 
     def stop_sending(self):
         """停止发送任务"""
+        # Task.cancel() can remain pending until the next event-loop turn.
+        # Python 3.10 has no public Task.cancelling() query, so publish the stop
+        # synchronously before another subtitle can enter the retired queue.
+        self.sending_stopped = True
         if self.pending_send_task and not self.pending_send_task.done():
             self.pending_send_task.cancel()
             self.logger.bind(tag=TAG).debug("已取消音频发送任务")

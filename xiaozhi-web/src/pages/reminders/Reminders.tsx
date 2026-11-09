@@ -116,7 +116,7 @@ function ScheduleCreate({ devices, deviceError, now, onSaved }: { devices: Devic
       {devices.length > 1 && <Form.Item name="deviceId" label="提醒设备" rules={[{ required: true, message: '请选择提醒设备' }]}><Select options={devices.map(device => ({ value: device.deviceId, label: device.name || device.deviceId }))} /></Form.Item>}
       {deviceError && <p role="alert">{deviceError}</p>}
       <Button type="primary" htmlType="submit" loading={busy} disabled={!!pending || !devices.length || !!deviceError}>保存提醒</Button>
-    </Form><p className="reminder-meta">“收到”完成本次提醒，周期安排继续生效。</p>
+    </Form>
   </section>;
 }
 
@@ -389,12 +389,11 @@ export default function Reminders() {
   </Space>;
 
   return <div className="reminders-page page-width">
-    <header className="page-heading"><div><h1>日程提醒<PageDoodle kind="reminder" /></h1><p>安排单次或周期提醒，到点由设备通知。</p></div>
+    <header className="page-heading"><div><h1>日程提醒<PageDoodle kind="reminder" /></h1></div>
       <Button icon={<ReloadOutlined />} onClick={manualRefresh} disabled={!!working}>刷新</Button></header>
     {readError && <Alert type="warning" showIcon title={'日程列表读取失败：' + readError} description={snapshot ? '保留上次读取的内容，操作暂不可用。请刷新核实。' : '请刷新重试。'} />}
     {pendingItems.length > 0 && <section className="surface reminder-pending" aria-labelledby="reminder-pending-title">
       <div className="section-heading"><h2 id="reminder-pending-title">有 {pendingItems.length} 条提醒需要处理</h2><Button onClick={() => window.dispatchEvent(new Event('xiaozhi:open-reminders'))}>集中回应或延后</Button></div>
-      <p className="task-list-note">等待再提醒和逾期的事项都可以在这里回应。点击“知道了”表示收到提醒。</p>
       {pendingItems.map(item => <article className="reminder-pending-row" key={item.id}>
         <div><h3>{item.title}</h3><p role="status">{reminderPhase(item, displayNow)}</p><small>原定时间：{dateLabel(item.scheduledAt || item.originalDueAt || item.dueAt)}</small></div>
         {legacyButtons(item, true)}
@@ -420,7 +419,6 @@ export default function Reminders() {
         </section>
         {data && <section className="surface reminder-queue" aria-labelledby="reminder-queue-title">
           <div className="section-heading reminder-queue-heading"><h2 id="reminder-queue-title">等待与进行中</h2><span>{legacyActive.length} 条提醒</span></div>
-          <p className="task-list-note">“收到”或“知道了”即完成本次，未回应时按原规则再次提醒。</p>
           <div className="reminder-queue-list">{legacyActive.map(item => {
             const arranged = item.scheduledAt || item.originalDueAt || item.dueAt;
             const time = queueTime(arranged);

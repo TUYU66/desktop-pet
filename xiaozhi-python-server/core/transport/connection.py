@@ -77,7 +77,6 @@ class ConnectionHandler(ConversationEngine):
         self.report_thread = None
         self.report_asr_enable = True
         self.report_tts_enable = True
-        self.conn_from_mqtt_gateway = False
 
         # 依赖的组件
         self.vad = None
@@ -113,8 +112,7 @@ class ConnectionHandler(ConversationEngine):
         self.pending_chassis_action = None
         self.latest_user_text = ""
 
-        # IoT / Tools
-        self.iot_descriptors = {}
+        # Tools
         self.func_handler = None
 
         self.cmd_exit = self.config["exit_commands"]
@@ -516,7 +514,7 @@ class ConnectionHandler(ConversationEngine):
             cancel_active_chat(self)
             self.input_generation = getattr(self, 'input_generation', 0) + 1
             current_task = asyncio.current_task()
-            for name in ('_asr_worker', '_standby_retry_task', '_standby_reply_task', '_config_apply_task',
+            for name in ('_bluetooth_notice_task', '_asr_worker', '_standby_retry_task', '_standby_reply_task', '_config_apply_task',
                          'task_followup_wake_task', 'task_followup_audio_task',
                          'task_followup_task', 'reminder_delivery_task'):
                 task = getattr(self, name, None)

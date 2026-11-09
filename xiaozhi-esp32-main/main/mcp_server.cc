@@ -133,15 +133,20 @@ void McpServer::AddUserOnlyTools() {
     // Firmware upgrade
     AddUserOnlyTool("self.upgrade_firmware", "Upgrade firmware from a specific URL. This will download and install the firmware, then reboot the device.",
         PropertyList({
-            Property("url", kPropertyTypeString, "The URL of the firmware binary file to download and install")
+            Property("url", kPropertyTypeString, "The URL of the firmware binary file to download and install"),
+            Property("version", kPropertyTypeString, std::string("")),
+            Property("job_id", kPropertyTypeString, std::string(""))
         }),
         [this](const PropertyList& properties) -> ReturnValue {
             auto url = properties["url"].value<std::string>();
             ESP_LOGI(TAG, "User requested firmware upgrade from URL: %s", url.c_str());
             
             auto& app = Application::GetInstance();
-            app.Schedule([url, &app]() {
-                bool success = app.UpgradeFirmware(url);
+            auto version = properties["version"].value<std::string>();
+            auto job_id = properties["job_id"].value<std::string>();
+            if (job_id.size()>64 || version.size()>31) throw std::invalid_argument("Invalid OTA request");
+            app.Schedule([url, version, job_id, &app]() {
+                bool success = app.UpgradeFirmware(url, version, job_id);
                 if (!success) {
                     ESP_LOGE(TAG, "Firmware upgrade failed");
                 }

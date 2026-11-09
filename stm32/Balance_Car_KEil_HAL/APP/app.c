@@ -1,23 +1,13 @@
 #include "app.h"
+#include "app_runtime.h"
 #include "ChassisLink/chassis_link.h"
-
-extern volatile u8 newLineReceived;
-extern u8 bulettohflag;
-
-// The foreground loop services the installed Bluetooth module.
-// Balance and battery sampling remain in their interrupt callbacks.
 void app_user(void)
 {
+    static uint32_t last_upload;
+    AppRuntime_ActionPoll();
     ChassisLink_Poll();
-    if (newLineReceived)
-    {
-        ProtocolCpyData();
-        Protocol();
-    }
-
-    if (bulettohflag)
-    {
-        bulettohflag = 0;
+    if ((uint32_t)(HAL_GetTick() - last_upload) >= 10U) {
+        last_upload = HAL_GetTick();
         SendAutoUp();
     }
 }

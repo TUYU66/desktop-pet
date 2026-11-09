@@ -2,7 +2,6 @@ from typing import Dict, Optional
 
 from core.handle.textHandler.abortMessageHandler import AbortTextMessageHandler
 from core.handle.textHandler.helloMessageHandler import HelloTextMessageHandler
-from core.handle.textHandler.iotMessageHandler import IotTextMessageHandler
 from core.handle.textHandler.listenMessageHandler import ListenTextMessageHandler
 from core.handle.textHandler.mcpMessageHandler import McpTextMessageHandler
 from core.handle.textMessageHandler import TextMessageHandler
@@ -25,7 +24,6 @@ class TextMessageHandlerRegistry:
             HelloTextMessageHandler(),
             AbortTextMessageHandler(),
             ListenTextMessageHandler(),
-            IotTextMessageHandler(),
             McpTextMessageHandler(),
             ServerTextMessageHandler(),
             PingMessageHandler(),

@@ -11,6 +11,9 @@ import com.xiaozhi.modules.user.service.UserService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.jdbc.core.JdbcTemplate;
+import jakarta.annotation.Resource;
+import java.nio.charset.StandardCharsets;
 
 import java.time.LocalDateTime;
 
@@ -18,6 +21,13 @@ import java.time.LocalDateTime;
 public class UserServiceImpl extends ServiceImpl<UserDao, UserEntity> implements UserService {
 
     private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder();
+    @Resource private JdbcTemplate jdbc;
+
+    @Override
+    public RegistrationState registrationState() {
+        long accounts = this.count(); // Disabled accounts also count as initialized.
+        return new RegistrationState(accounts > 0, accounts == 0, accounts > 1);
+    }
 
     @Override
     public UserEntity findByUsername(String username) {
@@ -33,40 +43,28 @@ public class UserServiceImpl extends ServiceImpl<UserDao, UserEntity> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean register(String username, String password) {
-        // 检查用户名是否已存在
-        UserEntity existing = findByUsername(username);
-        if (existing != null) {
-            throw new BusinessException(ErrorCode.USERNAME_EXISTS);
+        if (username == null || username.isBlank() || username.length() > 50 ||
+            password == null || password.isBlank() || password.length() < 6 ||
+            password.getBytes(StandardCharsets.UTF_8).length > 72) {
+            throw new BusinessException(ErrorCode.BAD_REQUEST, "用户名不超过50字符，密码至少6字符且不超过72字节");
         }
-
-        // SM2 解密密码（前端加密传输）
-        String plainPassword = password;
-        try {
-            // 如果密码以 SM2 密文格式开头，尝试解密
-            if (password.length() > 64) {
-                // 使用 hutool SM2 解密（实际部署需要配置公私钥对）
-                // plainPassword = sm2.decryptStr(password, KeyType.PrivateKey);
-            }
-        } catch (Exception ignored) {
-            // 解密失败则使用原始密码
-        }
+        // A permanent row exists even before the first account. Its lock lasts
+        // until this transaction commits, including across server instances.
+        jdbc.queryForObject("SELECT id FROM account_initialization_guard WHERE id=1 FOR UPDATE", Integer.class);
+        long accounts = this.count();
+        if (accounts > 1) throw new BusinessException(ErrorCode.ACCOUNT_CONFLICT);
+        if (accounts > 0) throw new BusinessException(ErrorCode.ACCOUNT_INITIALIZED);
 
         UserEntity user = new UserEntity();
         user.setUsername(username);
-        user.setPassword(ENCODER.encode(plainPassword));
+        user.setPassword(ENCODER.encode(password));
         user.setStatus(1);
         user.setCreateDate(LocalDateTime.now());
         user.setUpdateDate(LocalDateTime.now());
 
-        // 第一个注册的用户自动成为超级管理员
-        long count = this.count();
-        if (count == 0) {
-            user.setSuperAdmin(Constant.SUPER_ADMIN);
-        } else {
-            user.setSuperAdmin(0);
-        }
-
-        return this.save(user);
+        user.setSuperAdmin(Constant.SUPER_ADMIN);
+        if (!this.save(user)) throw new BusinessException(ErrorCode.INTERNAL_ERROR);
+        return true;
     }
 
     @Override

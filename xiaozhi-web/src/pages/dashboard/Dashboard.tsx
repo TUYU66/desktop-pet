@@ -175,7 +175,7 @@ export default function Dashboard() {
   if (loading) return <Spin />;
 
   return <div className="overview page-width companion-overview">
-    <div className="page-heading"><div><h1>桌面宠物</h1><p>查看连接状态，接着上次的话题聊。</p></div><div className="overview-actions"><Button icon={<ReloadOutlined />} loading={refreshing} onClick={() => void load(true)}>刷新</Button></div></div>
+    <div className="page-heading"><div><h1>桌面宠物</h1></div><div className="overview-actions"><Button icon={<ReloadOutlined />} loading={refreshing} onClick={() => void load(true)}>刷新</Button></div></div>
     {error && <Alert type="warning" showIcon title="设备状态暂时无法更新" description="连接状态可能不是最新状态，聊天记录独立加载。" />}
     <CompanionCard>
       <div className="companion-copy">

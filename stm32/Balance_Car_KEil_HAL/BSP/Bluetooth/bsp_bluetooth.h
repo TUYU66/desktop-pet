@@ -8,7 +8,8 @@ void UART5_RX_deal(void);
 
 
 
-void UART5_DataByte(uint8_t data_byte);
+void Bluetooth_ClearReceive(void);
+void Bluetooth_ReceivePoll(void);
 void UART5_Send_Char(char *s);
 
 

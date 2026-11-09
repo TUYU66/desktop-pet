@@ -16,7 +16,7 @@ def window(tick, left=2, right=1, enabled=True):
     samples = 100 if enabled else 0
     return (
         f"DIAG,CTRL,{tick},{int(enabled)},{samples},20,-10,1,50,100,-20,30,{left},{right},2,2\n"
-        f"DIAG,OBS,{tick},100,{samples},4,3,0,0,2,5,6,100,300\n"
+        f"DIAG,OBS,{tick},100,{samples},4,3,0,0,2,5,6,100,100,300\n"
     )
 
 

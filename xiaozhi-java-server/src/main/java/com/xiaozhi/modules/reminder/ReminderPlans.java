@@ -120,8 +120,9 @@ public class ReminderPlans {
     }
     @Transactional
     public void materialize(long now) {
-        var owners=jdbc.queryForList("SELECT id FROM sys_user WHERE status=1",Long.class);
-        long owner=owners.size()==1?owners.get(0):-1L;
+        var owners=jdbc.queryForList("SELECT id FROM sys_user WHERE status=1 AND (SELECT COUNT(*) FROM sys_user)=1",Long.class);
+        if (owners.size() != 1) return;
+        long owner = owners.get(0);
         var rows=jdbc.query("SELECT * FROM reminder_plan WHERE task_enabled=false AND user_id=? AND status='active' AND next_at<=? ORDER BY next_at LIMIT 20 FOR UPDATE",ROW,owner,now);
         for(var p:rows) {
             String id=UUID.nameUUIDFromBytes((p.id()+":"+p.nextAt()).getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();

@@ -1,3 +1,4 @@
+/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file    usart.c
@@ -6,17 +7,16 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2026 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
-
+/* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "usart.h"
 
@@ -58,10 +58,12 @@ void MX_UART5_Init(void)
   LL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /* UART5 interrupt Init */
-  NVIC_SetPriority(UART5_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),0, 0));
+  NVIC_SetPriority(UART5_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),1, 0));
   NVIC_EnableIRQ(UART5_IRQn);
 
   /* USER CODE BEGIN UART5_Init 1 */
+  /* Byte RX must preempt the software-I2C IMU ISR (priority 2).
+   * This high-priority receiver must never call RTOS APIs, even FromISR. */
 
   /* USER CODE END UART5_Init 1 */
   USART_InitStruct.BaudRate = 9600;
@@ -139,10 +141,12 @@ void MX_USART2_UART_Init(void)
   LL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* USART2 interrupt Init */
-  NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),1, 1));
+  NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(NVIC_GetPriorityGrouping(),1, 0));
   NVIC_EnableIRQ(USART2_IRQn);
 
   /* USER CODE BEGIN USART2_Init 1 */
+  /* Byte RX must preempt the software-I2C IMU ISR (priority 2).
+   * This high-priority receiver must never call RTOS APIs, even FromISR. */
 
   /* USER CODE END USART2_Init 1 */
   USART_InitStruct.BaudRate = 115200;
@@ -221,4 +225,3 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 
 /* USER CODE END 1 */
 
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -71,7 +71,6 @@ export default function PlayerControls({ source, state, deviceId, busy, canCance
         disabled={busy || !deviceId} onChange={setVolumeDraft} onChangeComplete={async value => {
           await control('volume', source, undefined, value); setVolumeDraft(null);
         }} />
-      <small>说“暂停播放”或“下一首”控制当前音乐。切换下方歌曲列表可继续选歌。</small>
     </div>
   </section>{state?.trackId && <LyricsPanel source={source} trackId={state.trackId} seconds={seconds} />}</div>;
 }

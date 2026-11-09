@@ -14,6 +14,15 @@ void Protocol::SendStandbyAck(const std::string& id) {
     cJSON_Delete(root);
 }
 
+void Protocol::SendBluetoothControlEvent(unsigned int id, bool enabled, bool success, bool cancel) {
+    if (!id || id > 65535) return;
+    const std::string message = std::string("{\"type\":\"") +
+        (cancel ? "bluetooth_control_cancel" : "bluetooth_control") +
+        "\",\"id\":" + std::to_string(id) + ",\"enabled\":" + (enabled ? "true" : "false") +
+        ",\"success\":" + (success ? "true" : "false") + "}";
+    SendText(message);
+}
+
 void Protocol::OnIncomingJson(std::function<void(const cJSON* root)> callback) {
     on_incoming_json_ = callback;
 }
@@ -64,7 +73,7 @@ void Protocol::SendAbortSpeaking(AbortReason reason) {
 
 void Protocol::SendWakeWordDetected(const std::string& wake_word) {
     // 唤醒词先作为控制消息发送，服务器随后决定是否进入正式监听。
-    std::string json = "{\"session_id\":\"" + session_id_ + 
+    std::string json = "{\"session_id\":\"" + session_id_ +
                       "\",\"type\":\"listen\",\"state\":\"detect\",\"text\":\"" + wake_word + "\"}";
     SendText(json);
 }
@@ -117,4 +126,18 @@ void Protocol::SendWakeWordConfigResult(const std::string& id, const std::string
     char* json = cJSON_PrintUnformatted(root);
     if (json) { SendText(json); cJSON_free(json); }
     cJSON_Delete(root);
+}
+
+// OTA进度通过保留的控制连接上报，不依赖主循环执行新的MCP查询。
+void Protocol::SendOtaProgress(const std::string& job_id, const char* phase, int progress) {
+    if (job_id.empty()) return;
+    auto root=cJSON_CreateObject();
+    cJSON_AddStringToObject(root,"type","ota_progress");
+    cJSON_AddStringToObject(root,"jobId",job_id.c_str());
+    cJSON_AddStringToObject(root,"phase",phase);
+    cJSON_AddNumberToObject(root,"progress",progress);
+    char* encoded=cJSON_PrintUnformatted(root);
+    if(encoded) { SendText(encoded); cJSON_free(encoded); }
+    cJSON_Delete(root);
+    SendText(R"({"type":"ping"})");
 }

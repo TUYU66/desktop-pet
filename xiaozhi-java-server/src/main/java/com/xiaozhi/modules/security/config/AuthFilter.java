@@ -62,7 +62,7 @@ public class AuthFilter implements WebFilter {
             }
             return Mono.fromCallable(()->{
                 var active=new LambdaQueryWrapper<UserEntity>().eq(UserEntity::getStatus,1);
-                if(!Long.valueOf(1L).equals(userDao.selectCount(active))) return false;
+                if(!Long.valueOf(1L).equals(userDao.selectCount(null))) return false;
                 var user=userDao.selectOne(active);
                 if(user==null) return false;
                 exchange.getAttributes().put("currentUser",user); return true;
@@ -82,13 +82,13 @@ public class AuthFilter implements WebFilter {
                     return rejectMemory(exchange,"memory_service_key_invalid");
                 String owner=exchange.getRequest().getHeaders().getFirst("Memory-Owner-Id");
                 UserEntity user;
+                if (!Long.valueOf(1L).equals(userDao.selectCount(null))) return rejectMemory(exchange,"memory_owner_ambiguous");
                 if(owner!=null) {
                     // 显式选择用户必须配置私有服务密钥，不能用公开的兼容常量切换用户。
                     if(memoryServiceKey.isBlank()) return rejectMemory(exchange,"memory_owner_requires_private_key");
                     try { user=userDao.selectById(Long.valueOf(owner)); } catch(NumberFormatException e) { return rejectMemory(exchange,"memory_owner_invalid"); }
                 } else {
                     var active=new LambdaQueryWrapper<UserEntity>().eq(UserEntity::getStatus,1);
-                    if(!Long.valueOf(1L).equals(userDao.selectCount(active))) return rejectMemory(exchange,"memory_owner_ambiguous");
                     user=userDao.selectOne(active);
                 }
                 if(user==null || !Integer.valueOf(1).equals(user.getStatus())) return rejectMemory(exchange,"memory_owner_invalid");
@@ -109,16 +109,11 @@ public class AuthFilter implements WebFilter {
             }
             return Mono.fromCallable(() -> {
                         var active=new LambdaQueryWrapper<UserEntity>().eq(UserEntity::getStatus,1);
-                        if(!Long.valueOf(1L).equals(userDao.selectCount(active))) return false;
-                        UserEntity firstUser = userDao.selectOne(
-                                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserEntity>()
-                                        .eq(UserEntity::getStatus, 1)
-                                        .last("LIMIT 1")
-                        );
-                        if (firstUser != null) {
-                            exchange.getAttributes().put("currentUser", firstUser);
-                        }
-                        return firstUser != null;
+                        if(!Long.valueOf(1L).equals(userDao.selectCount(null))) return false;
+                        UserEntity user = userDao.selectOne(active);
+                        if (user == null) return false;
+                        exchange.getAttributes().put("currentUser", user);
+                        return true;
                     })
                     .subscribeOn(Schedulers.boundedElastic())
                     .flatMap(success -> {
@@ -147,7 +142,7 @@ public class AuthFilter implements WebFilter {
                                     .eq(UserTokenEntity::getToken, token)
                                     .gt(UserTokenEntity::getExpireDate, LocalDateTime.now())
                     );
-                    if (tokenEntity == null) {
+                    if (tokenEntity == null || !Long.valueOf(1L).equals(userDao.selectCount(null))) {
                         return Boolean.FALSE;
                     }
                     // 查找用户
@@ -186,7 +181,7 @@ public class AuthFilter implements WebFilter {
     }
 
     private boolean isPublicPath(String path,String method) {
-        return method.equals("GET")&&Set.of("/xiaozhi/api/health","/xiaozhi/api/auth/captcha","/xiaozhi/api/user/pub-config").contains(path)
+        return method.equals("GET")&&Set.of("/xiaozhi/api/health","/xiaozhi/api/auth/captcha","/xiaozhi/api/auth/registration-status").contains(path)
             || method.equals("POST")&&Set.of("/xiaozhi/api/auth/login","/xiaozhi/api/auth/register").contains(path);
     }
 

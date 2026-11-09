@@ -17,6 +17,7 @@ static volatile float rest_offset_limit;
 static volatile u8 rest_rear_samples;
 static volatile uint32_t balance_started_ms;
 static volatile u8 balance_watchdog_armed;
+static volatile u8 balance_rise_pending; /* Telemetry only; cleared after confirmed standing. */
 volatile u8 chassis_turn_event = 0;
 volatile u8 chassis_turn_error = 0;
 /* 0=idle, 1=rising, 2=stabilizing before turn, 3=turning,
@@ -838,6 +839,7 @@ u8 Chassis_StartBalance(void)
     standing_samples = 0;
     balance_started_ms = now;
     balance_watchdog_armed = 1;
+    balance_rise_pending = 1;
     PID_ResetVelocity();
     Motor_ResetBalanceCompensation();
     Stop_Flag = 0;
@@ -859,6 +861,31 @@ u8 Chassis_PostureResult(u8 standing)
     else if (chassis_rest_state == 0) result = 2;
     __set_PRIMASK(irq);
     return result;
+}
+
+/* Explicit physical/control state, not an action-completion receipt.
+ * 0=unknown, 1=standing/balancing, 2=seated, 3=rising, 4=sitting, 5=fault.
+ * A stopped controller alone never proves that the rear support is seated. */
+void Chassis_FormatState(char *text, unsigned int size)
+{
+    uint32_t irq = __get_PRIMASK(), now;
+    u8 pose = 0, stopped, bluetooth;
+    __disable_irq();
+    now = HAL_GetTick();
+    stopped = Stop_Flag != 0;
+    bluetooth = bluetooth_control_enabled != 0;
+    if (chassis_rest_state == 3) pose = 5;
+    else if (angle_sample_valid && (uint32_t)(now - angle_last_update_ms) <= 150U &&
+             !calibration_active && !Chassis_GyroActive()) {
+        if (chassis_rest_state == 1) pose = 4;
+        else if (stopped && (chassis_rest_state == 0 || chassis_rest_state == 2) &&
+                 rear_support_samples >= 40) pose = 2;
+        else if (!stopped && (turn_state == TURN_RISING || balance_rise_pending)) pose = 3;
+        else if (!stopped && chassis_rest_state == 0) pose = 1;
+    }
+    __set_PRIMASK(irq);
+    snprintf(text, size, "POSE,1,%lu,%u,%u,%u\n", (unsigned long)now,
+             (unsigned int)pose, (unsigned int)stopped, (unsigned int)bluetooth);
 }
 
 u8 Chassis_MotionWatchdog(void)
@@ -1105,6 +1132,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     if (!turn_stance_failure(encoder_left, encoder_right) && chassis_rest_state == 0) {
         if (standing_samples < 100) standing_samples++;
     } else standing_samples = 0;
+    if (standing_samples >= 100) balance_rise_pending = 0;
     turn_on_imu(encoder_left, encoder_right);
 
     balance_pwm = Balance_PD(Angle_Balance, Gyro_Balance);
@@ -1159,8 +1187,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 
     if (chassis_rest_state == 0 && Pick_Up(Acceleration_Z, Angle_Balance, encoder_left, encoder_right))
         Stop_Flag = 1;
-    if (!Chassis_GyroActive() && chassis_rest_state == 0 && Put_Down(Angle_Balance, encoder_left, encoder_right))
-        Stop_Flag = 0;
+    /* Pickup/fall stops stay latched until an explicit, validated STAND command. */
 
     motor_enabled = Turn_Off(Angle_Balance, battery) == 0;
     if (motor_enabled)
@@ -1273,37 +1300,3 @@ int Pick_Up(float Acceleration,float Angle,int encoder_left,int encoder_right)
 	 }
 	return 0;
 }
-/**************************************************************************
-Function: Check whether the car is lowered
-Input   : The angle of balance；Left encoder count；Right encoder count
-Output  : 1：put down  0：No action
-函数功能：检测小车是否被放下
-入口参数：平衡角度；左编码器读数；右编码器读数
-返回  值：1：小车放下   0：小车未放下
-**************************************************************************/
-int Put_Down(float Angle,int encoder_left,int encoder_right)
-{ 		   
-	 static u16 flag;//,count;	 
-	 if(Stop_Flag==0)                     //防止误检    Prevent false positives   
-			return 0;	                 
-	 if(flag==0)                                               
-	 {
-			if(Angle>(-10+Mid_Angle)&&Angle<(10+Mid_Angle)&&encoder_left==0&&encoder_right==0) //条件1，小车是在0度附近的 Condition 1, the car is around 0 degrees
-			flag=1; 
-	 } 
-	 if(flag==1)                                               
-	 {
-//		  if(++count>50)                     //超时不再等待 500ms  Timeout no longer waits 500ms
-//		  {
-//				count=0;flag=0;
-//		  }
-		 //增加灵敏性 Increase sensitivity
-	    if((encoder_left>3&&encoder_left<40)||(encoder_right>3&&encoder_right<40)) //条件2，小车的轮胎在未上电的时候被人为转动  Condition 2: The tires of the car are manually rotated when not powered on
-      {
-				flag=0;
-				return 1;                         //检测到小车被放下 Detected that the car has been lowered
-			}
-	 }
-	return 0;
-}
-

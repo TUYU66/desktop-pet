@@ -3,6 +3,7 @@
 #include "audio/wake_words/dynamic_wake_word.h"
 #endif
 #include "application.h"
+#include <algorithm>
 #include "board.h"
 #include "display.h"
 #include "system_info.h"
@@ -602,38 +603,41 @@ void Application::Reboot(const char* reason) {
     esp_restart();
 }
 
-bool Application::UpgradeFirmware(const std::string& url, const std::string& version) {
+bool Application::UpgradeFirmware(const std::string& url, const std::string& version, const std::string& job_id) {
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
 
     std::string upgrade_url = url;
     std::string version_info = version.empty() ? "(Manual upgrade)" : version;
 
-    // Close audio channel if it's open
-    if (protocol_ && protocol_->IsAudioChannelOpened()) {
-        ESP_LOGI(TAG, "Closing audio channel before firmware upgrade");
-        protocol_->CloseAudioChannel();
-    }
+    // 停止对话但保留控制连接，升级期间直接推送进度；旧协议仍按原有待命策略退出。
+    auto upgrade_protocol = protocol_;
+    if (upgrade_protocol && upgrade_protocol->IsAudioChannelOpened()) upgrade_protocol->EnterStandby();
+    auto report = [display, upgrade_protocol, job_id](const char* phase, int progress) {
+        display->SetUpgradeProgress("ESP32", phase, progress);
+        if (upgrade_protocol) upgrade_protocol->SendOtaProgress(job_id, phase, progress);
+    };
     ESP_LOGI(TAG, "Starting firmware upgrade from URL: %s", upgrade_url.c_str());
 
-    Alert(Lang::Strings::OTA_UPGRADE, Lang::Strings::UPGRADING, "download", Lang::Sounds::OGG_UPGRADE);
+    // 两端 OTA 统一使用专用界面，提示音不再写入聊天字幕。
+    report("queued", 0);
+    PlaySound(Lang::Sounds::OGG_UPGRADE);
     vTaskDelay(pdMS_TO_TICKS(3000));
 
     SetDeviceState(kDeviceStateUpgrading);
 
-    std::string message = std::string(Lang::Strings::NEW_VERSION) + version_info;
-    display->SetChatMessage("system", message.c_str());
+    ESP_LOGI(TAG, "ESP32 target version: %s", version_info.c_str());
 
     board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
     audio_service_.Stop();
     vTaskDelay(pdMS_TO_TICKS(1000));
 
-    bool upgrade_success = Ota::Upgrade(upgrade_url, [this, display](int progress, size_t speed) {
-        char buffer[32];
-        snprintf(buffer, sizeof(buffer), "%d%% %uKB/s", progress, speed / 1024);
-        Schedule([display, message = std::string(buffer)]() {
-            display->SetChatMessage("system", message.c_str());
-        });
+    bool upgrade_success = Ota::Upgrade(upgrade_url, [report, last_progress = -1](int progress, size_t) mutable {
+        // 与底盘一样仅按整数进度刷新；最终校验和启动分区切换成功后才显示100%。
+        const int percent = std::max(0, std::min(99, progress));
+        if (percent == last_progress) return;
+        last_progress = percent;
+        report("downloading", percent);
     });
 
     if (!upgrade_success) {
@@ -641,14 +645,17 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
         ESP_LOGE(TAG, "Firmware upgrade failed, restarting audio service and continuing operation...");
         audio_service_.Start(); // Restart audio service
         board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER); // Restore power save level
-        Alert(Lang::Strings::ERROR, Lang::Strings::UPGRADE_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
+        SetDeviceState(kDeviceStateIdle);
+        report("failed", 0);
+        PlaySound(Lang::Sounds::OGG_EXCLAMATION);
         vTaskDelay(pdMS_TO_TICKS(3000));
         return false;
     } else {
-        // Upgrade success, reboot immediately
+        // Upgrade success, show the shared result screen before reboot
         ESP_LOGI(TAG, "Firmware upgrade successful, rebooting...");
-        display->SetChatMessage("system", "Upgrade successful, rebooting...");
-        vTaskDelay(pdMS_TO_TICKS(1000)); // Brief pause to show message
+        display->SetUpgradeProgress("ESP32", "completed", 100);
+        if (upgrade_protocol) upgrade_protocol->SendOtaProgress(job_id, "rebooting", 99);
+        vTaskDelay(pdMS_TO_TICKS(3000)); // 与底盘升级结果界面统一停留3秒
         Reboot("firmware_upgrade");
         return true;
     }
@@ -704,6 +711,14 @@ bool Application::CanEnterSleepMode() {
 
     // Now it is safe to enter sleep mode
     return true;
+}
+
+void Application::SendBluetoothControlEvent(unsigned int id, bool enabled, bool success, bool cancel) {
+    const auto session = McpServer::GetInstance().Session();
+    Schedule([this, id, enabled, success, cancel, session]() {
+        if (!protocol_ || session != McpServer::GetInstance().Session() || !protocol_->IsAudioChannelOpened()) return;
+        protocol_->SendBluetoothControlEvent(id, enabled, success, cancel);
+    });
 }
 
 void Application::SendMcpMessage(const std::string& payload) {

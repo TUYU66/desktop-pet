@@ -173,7 +173,7 @@ export function useChatHistory(session: string | null, date: string, mode: Histo
       if (ctx.busy) return;
       return perform.current(ctx.ready ? 'new' : 'initial', signal);
     }, {
-      interval: date ? 5000 : 2000, maxInterval: 30000,
+      interval: date ? 5000 : 1000, maxInterval: 30000,
       enabled: () => current() && !!ctx.session && !ctx.unsupported && (mode === 'paged' || !ctx.ready),
     });
     resumePolling.current = polling.resume;

@@ -116,7 +116,7 @@ async def startToChat(conn: "ConnectionHandler", text, display_text=None):
             return
 
     from core.music.conversation import handle_input
-    handled, actual_text = await handle_input(conn, actual_text)
+    handled, actual_text = await handle_input(conn, actual_text, asr_reported=True)
     if handled:
         return
 

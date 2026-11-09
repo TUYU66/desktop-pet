@@ -109,6 +109,9 @@ class ListenTextMessageHandler(TextMessageHandler):
                 is_wakeup_words = (filtered_text in conn.config.get("wakeup_words", [])
                                    or filtered_text == "你好小智"
                                    or filtered_text == conn.config.get("customWakeWord"))
+                if is_wakeup_words:
+                    # Only the first following ASR utterance may be wake audio.
+                    conn.pending_wake_echo = (filtered_text, time.monotonic(), conn.session_id)
                 # 是否开启唤醒词回复
                 enable_greeting = conn.config.get("enable_greeting", True)
 

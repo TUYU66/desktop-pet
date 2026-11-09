@@ -114,6 +114,7 @@ void AfeAudioProcessor::Feed(std::vector<int16_t>&& data) {
         return;
     }
     if (software_reference_) {
+        std::lock_guard<std::mutex> reference_lock(playback_reference_mutex_);
         for (auto sample : data) {
             input_buffer_.push_back(sample);
             input_buffer_.push_back(playback_reference_.empty() ? 0 : playback_reference_.front());
@@ -133,7 +134,8 @@ void AfeAudioProcessor::Feed(std::vector<int16_t>&& data) {
 }
 
 void AfeAudioProcessor::FeedPlaybackReference(const std::vector<int16_t>& data) {
-    std::lock_guard<std::mutex> lock(input_buffer_mutex_);
+    // Never wait on input_buffer_mutex_: AFE feed can block the microphone task.
+    std::lock_guard<std::mutex> lock(playback_reference_mutex_);
     if (!software_reference_ || !IsRunning()) return;
     const auto now = esp_timer_get_time();
     barge_in_gate_.AddReference(data.data(), data.size(), now);
@@ -160,8 +162,11 @@ void AfeAudioProcessor::Stop() {
         afe_iface_->reset_buffer(afe_data_);
     }
     input_buffer_.clear();
-    playback_reference_.clear();
-    last_reference_us_ = 0;
+    {
+        std::lock_guard<std::mutex> reference_lock(playback_reference_mutex_);
+        playback_reference_.clear();
+        last_reference_us_ = 0;
+    }
     is_speaking_ = false;
     barge_in_gate_.Reset();
 }

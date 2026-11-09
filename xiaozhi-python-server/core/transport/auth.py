@@ -15,7 +15,6 @@ class AuthManager:
     统一授权认证管理器
     生成与验证 client_id device_id token（HMAC-SHA256）认证三元组
     token 中不含明文 client_id/device_id，只携带签名 + 时间戳; client_id/device_id在连接时传递
-    在 MQTT 中 client_id: client_id, username: device_id, password: token
     在 Websocket 中，header:{Device-ID: device_id, Client-ID: client_id, Authorization: Bearer token, ......}
     """
 

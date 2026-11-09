@@ -222,11 +222,7 @@ export default function MemoryList() {
   };
 
   return <div className="memory-page page-width">
-    <div className="page-heading"><div><h1>长期记忆<PageDoodle kind="memory" /></h1><Typography.Paragraph type="secondary">
-      {roleName} 会在每次回答前读取这里的内容。你可以补充、修正或删除任何一条。
-    </Typography.Paragraph><Typography.Paragraph type="secondary">
-      明确且有长期价值的个人信息、关系、喜好、习惯、目标和重要经历会自动记忆。其他无法归类的信息，仅在你明确要求时保存。日期表示当时的陈述，不会自动推算年龄或年级。
-    </Typography.Paragraph></div><div><Button onClick={() => void load()} loading={loading} disabled={saving}>刷新</Button> <Button type="primary" icon={<PlusOutlined />} disabled={!writable} onClick={openCreate}>添加记忆</Button></div></div>
+    <div className="page-heading"><div><h1>长期记忆<PageDoodle kind="memory" /></h1></div><div><Button onClick={() => void load()} loading={loading} disabled={saving}>刷新</Button> <Button type="primary" icon={<PlusOutlined />} disabled={!writable} onClick={openCreate}>添加记忆</Button></div></div>
 
     {loadFailed && <Alert type="warning" showIcon title="记忆读取失败" description={`${loadError}${hasLoaded ? '。下方保留上次成功读取的内容，尚未更新；重新加载成功后才能编辑。' : '。暂时无法确认是否有记忆，请重新加载。'}`}
       action={<Button onClick={() => void load()} loading={loading}>重新加载</Button>} />}
@@ -263,7 +259,7 @@ export default function MemoryList() {
     <Modal title={editing ? '编辑记忆' : '添加记忆'} open={modalOpen} confirmLoading={saving} okText="保存" cancelText="取消"
       onOk={() => void save()} okButtonProps={{ disabled: !writable }} onCancel={() => !saving && setModalOpen(false)} destroyOnHidden>
       <Form form={form} layout="vertical" preserve={false} disabled={!writable}>
-        <Form.Item name="key" label="记忆主题" extra="每条保留一个独立事实，例如猫和狗的数量应分别保存。" rules={[{ required: true, whitespace: true, message: '请输入记忆主题' }, { max: 120 }]}>
+        <Form.Item name="key" label="记忆主题" extra="一条记忆记录一件事。" rules={[{ required: true, whitespace: true, message: '请输入记忆主题' }, { max: 120 }]}>
           <Input maxLength={120} placeholder="例如：用户的猫数量" />
         </Form.Item>
         <Form.Item name="category" label="分类" rules={[{ required: true }]}><Select options={CATEGORIES.map(({ value, label }) => ({ value, label }))} /></Form.Item>

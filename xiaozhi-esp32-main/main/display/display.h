@@ -30,6 +30,8 @@ public:
     virtual ~Display();
 
     virtual void SetStatus(const char* status);
+    // 固件升级专用界面；phase 使用 OTA 阶段名，结束阶段为 completed/failed。
+    virtual void SetUpgradeProgress(const char* target, const char* phase, int progress) {}
     virtual void ShowNotification(const char* notification, int duration_ms = 3000);
     virtual void ShowNotification(const std::string &notification, int duration_ms = 3000);
     virtual void SetEmotion(const char* emotion);

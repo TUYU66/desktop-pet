@@ -84,8 +84,9 @@ public:
 
     void Reboot(const char* reason = "requested");
     void WakeWordInvoke(const std::string& wake_word);
-    bool UpgradeFirmware(const std::string& url, const std::string& version = "");
+    bool UpgradeFirmware(const std::string& url, const std::string& version = "", const std::string& job_id = "");
     bool CanEnterSleepMode();
+    void SendBluetoothControlEvent(unsigned int id, bool enabled, bool success, bool cancel = false);
     void SendMcpMessage(const std::string& payload);
     void SendMcpMessage(const std::string& payload, uint32_t session);
     void SetAecMode(AecMode mode);

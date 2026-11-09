@@ -26,6 +26,8 @@ close_connection_no_voice_time: 120
 # 待命设备连续对话的空闲秒数；0 禁用自动待命，心跳不延长此时间。
 standby_idle_seconds: 30
 tts_min_segment_chars: 12
+# 先完整合成每段语音，再解码发送；设为 true 可对照增量播放。
+tts_incremental_decode: false
 tts_timeout: 10
 tool_call_timeout: 30
 enable_wakeup_words_response_cache: true
@@ -93,7 +95,6 @@ Intent:
   function_call:
     type: function_call
     functions:
-      - change_role
       - get_weather
       - get_news_from_newsnow
       - web_search

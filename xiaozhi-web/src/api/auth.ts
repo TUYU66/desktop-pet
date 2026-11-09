@@ -20,6 +20,16 @@ export function register(params: { username: string; password: string }) {
   return request.post('/auth/register', params);
 }
 
+export interface RegistrationState {
+  initialized: boolean;
+  registrationOpen: boolean;
+  accountConflict: boolean;
+}
+
+export function getRegistrationStatus() {
+  return request.get<unknown, { data: RegistrationState }>('/auth/registration-status');
+}
+
 export function logout() {
   return request.post('/auth/logout');
 }

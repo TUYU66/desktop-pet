@@ -25,4 +25,5 @@
     <include file="db/changelog/v1.9.4_reminder_round.xml"/>
     <include file="db/changelog/v1.9.5_reminder_45_seconds.xml"/>
     <include file="db/changelog/v1.9.6_reminder_deadline_indexes.xml"/>
+    <include file="db/changelog/v1.9.7_single_account.xml"/>
 </databaseChangeLog>

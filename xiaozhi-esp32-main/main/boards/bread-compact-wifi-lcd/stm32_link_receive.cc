@@ -34,6 +34,7 @@ void Stm32Link::TaskEntry(void* context) {
 }
 
 void Stm32Link::Poll() {
+    if (ota_exclusive_.load()) return;
     if (uart_mutex_ == nullptr || xSemaphoreTake(uart_mutex_, pdMS_TO_TICKS(20)) != pdTRUE) return;
     uart_event_t event;
     bool damaged = false;
@@ -115,11 +116,37 @@ void Stm32Link::FeedByte(uint8_t byte) {
 
 void Stm32Link::ProcessLine(const char* line) {
     const TickType_t now = xTaskGetTickCount();
+    if (strncmp(line,"BOOT_STATE,",11)==0) {
+        int64_t fields[3]{};
+        if(!ParseFields(line+11,fields,3)||fields[0]!=3||fields[1]<0||fields[1]>4||
+           fields[2]<0||fields[2]>UINT32_MAX||(fields[1]>0&&fields[2]==0)) return;
+        MarkFrame();boot_recovery_state_=static_cast<int>(fields[1]);boot_recovery_tick_=now;
+        status_valid_=false;
+        std::lock_guard<std::mutex> lock(motion_mutex_);posture_seen_=false;motion_seen_=false;
+        return;
+    }
+    if (strncmp(line, "POSE,", 5) == 0) {
+        int64_t fields[5]{};
+        if (!ParseFields(line + 5, fields, 5) || fields[0] != 1 || fields[1] < 0 ||
+            fields[2] < 0 || fields[2] > 5 || fields[3] < 0 || fields[3] > 1 ||
+            fields[4] < 0 || fields[4] > 1 ||
+            ((fields[2] == 1 || fields[2] == 3 || fields[2] == 4) && fields[3] != 0) ||
+            (fields[2] == 2 && fields[3] != 1)) return;
+        MarkFrame();
+        std::lock_guard<std::mutex> lock(motion_mutex_);
+        posture_state_ = static_cast<int>(fields[2]);
+        boot_recovery_state_=-1;
+        posture_tick_ = now;
+        posture_seen_ = true;
+        bluetooth_mode_.store(static_cast<int>(fields[4]));
+        bluetooth_tick_.store(now);
+        return;
+    }
     unsigned int turn_sequence = 0;
     char extra = 0;
     if (strcmp(line, "BT_REVOKED,0") == 0) {
         MarkFrame(); app_bluetooth_id_.store(0);
-        InterruptBluetoothPrompt();
+        CancelBluetoothAnnouncement();
         return;
     }
     int64_t app_fields[2]{};
@@ -129,7 +156,7 @@ void Stm32Link::ProcessLine(const char* line) {
         const auto identifier = static_cast<unsigned int>(app_fields[0]);
         if (app_bluetooth_id_.load() == identifier) return;
         app_bluetooth_id_.store(identifier); app_bluetooth_target_.store(app_fields[1] != 0);
-        InterruptBluetoothPrompt();
+        CancelBluetoothAnnouncement();
         AppBluetoothRequest request{identifier, app_fields[1] != 0};
         if (app_bluetooth_queue_) xQueueOverwrite(app_bluetooth_queue_, &request);
         else {
@@ -145,6 +172,16 @@ void Stm32Link::ProcessLine(const char* line) {
         ESP_LOGW(kTag, "STM32 TURN result unknown: id=%u pending=%u", unknown_sequence,
                  static_cast<unsigned int>(pending_sequence_.load()));
         PublishReply(unknown_sequence, 2, kUnconfirmed);
+        return;
+    }
+    unsigned int unknown_posture = 0;
+    if (sscanf(line, "POSTURE_UNKNOWN,%u%c", &unknown_posture, &extra) == 1 &&
+        unknown_posture > 0 && unknown_posture <= 65535) {
+        MarkFrame();
+        ESP_LOGW(kTag, "STM32 posture result unknown: id=%u pending=%u kind=%d", unknown_posture,
+                 static_cast<unsigned int>(pending_sequence_.load()), pending_kind_.load());
+        const int kind = pending_kind_.load();
+        if (kind == 1 || kind == 3) PublishReply(unknown_posture, kind, kUnconfirmed);
         return;
     }
     unsigned int bluetooth_id = 0, bluetooth_enabled = 0;
@@ -321,6 +358,27 @@ void Stm32Link::ProcessLine(const char* line) {
         } else if (strncmp(line, "DIAG,S,", 7) == 0) {
             valid = ParseFields(line + 7, fields, 12) && fields[0] >= 0 &&
                 fields[1] >= 0 && fields[1] <= 1 && fields[2] >= 0 && fields[3] >= 0 && fields[4] >= 0;
+        } else if (strncmp(line, "DIAG,RTOS,", 10) == 0) {
+            // Version, tick ms, App/Idle/Timer stack minima (bytes), heap free/min.
+            valid = ParseFields(line + 10, fields, 7) && fields[0] == 1 &&
+                fields[1] >= 0 && fields[1] <= UINT32_MAX;
+            for (int i = 2; valid && i < 7; ++i) valid = fields[i] >= 0 && fields[i] <= 49152;
+            valid = valid && fields[6] <= fields[5];
+        } else if (strncmp(line, "DIAG,TASKS,", 11) == 0) {
+            // Version, tick, Action/Receive/Monitor/Transmit minimum free stack bytes.
+            valid = ParseFields(line + 11, fields, 6) && fields[0] == 1 &&
+                fields[1] >= 0 && fields[1] <= UINT32_MAX;
+            for (int i = 2; valid && i < 6; ++i) valid = fields[i] >= 0 && fields[i] <= 49152;
+        } else if (strncmp(line, "DIAG,QUEUE,", 11) == 0) {
+            // Command full/stale, reply full, telemetry dropped, TX timeout counters.
+            valid = ParseFields(line + 11, fields, 6) && fields[0] == 1;
+            for (int i = 1; valid && i < 6; ++i) valid = fields[i] >= 0 && fields[i] <= UINT32_MAX;
+        } else if (strncmp(line, "DIAG,IRQ,", 9) == 0) {
+            // Version, tick, window samples, min/max interval us, max elapsed us, overruns.
+            valid = ParseFields(line + 9, fields, 7) && fields[0] == 1;
+            for (int i = 1; valid && i < 7; ++i) valid = fields[i] >= 0 && fields[i] <= UINT32_MAX;
+            valid = valid && fields[3] <= fields[4] && fields[6] <= fields[2];
+            if (valid && fields[2] == 0) valid = fields[3] == 0 && fields[4] == 0 && fields[5] == 0 && fields[6] == 0;
         } else if (strncmp(line, "DIAG,CTRL,", 10) == 0) {
             // Enabled samples only: PI state, common drive range, wheel travel and reversals.
             valid = ParseFields(line + 10, fields, 14) && fields[0] >= 0 &&
@@ -347,8 +405,16 @@ void Stm32Link::ProcessLine(const char* line) {
                 fields[4] >= -33000 && fields[4] <= 33000 &&
                 fields[5] >= -1000000 && fields[5] <= 1000000 && fields[6] >= 0 && fields[6] <= 1000;
             if (valid && fields[0] == 4) balance_stopped_.store(1);
+        } else if (strncmp(line, "DIAG,OTA,", 9) == 0) {
+            valid = ParseFields(line + 9, fields, 1) && fields[0] > 0;
+            if (valid) {
+                ota_supported_.store(true);
+                installed_ota_version_.store(static_cast<uint32_t>(fields[0]));
+                installed_ota_tick_.store(now);
+            }
         } else if (strncmp(line, "DIAG,FW,", 8) == 0) {
             valid = ParseFields(line + 8, fields, 3) && fields[0] > 0 && fields[1] == 2 && fields[2] >= 0;
+            if (valid) ota_supported_.store((static_cast<uint32_t>(fields[2]) & 8192U) != 0);
         } else if (strncmp(line, "DIAG,CFG,", 9) == 0) {
             valid = ParseFields(line + 9, fields, 11);
             for (int i = 1; valid && i < 11; ++i) valid = fields[i] >= 0;

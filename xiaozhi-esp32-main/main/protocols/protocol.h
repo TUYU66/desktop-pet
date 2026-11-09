@@ -83,7 +83,9 @@ public:
     // 主循环周期调用；支持常连接的协议可在这里发心跳或尝试重连。
     virtual void MaintainConnection(bool allow_reconnect) { (void)allow_reconnect; }
     void SendWakeWordConfigResult(const std::string& id, const std::string& word, const std::string& status);
+    void SendOtaProgress(const std::string& job_id, const char* phase, int progress);
     void SendStandbyAck(const std::string& id);
+    void SendBluetoothControlEvent(unsigned int id, bool enabled, bool success, bool cancel);
     virtual void SendWakeWordDetected(const std::string& wake_word);
     virtual void SendStartListening(ListeningMode mode);
     virtual void SendStopListening();

@@ -88,6 +88,16 @@ void Application::CheckNewVersion() {
     int retry_delay = 2; // Keep startup retries bounded.
 
     auto& board = Board::GetInstance();
+    // 底盘发布版本每秒播报一次，首次检查最多等3秒；只等待，不触发动作。
+    for (int i=0; i<3; ++i) {
+        auto snapshot=board.GetChassisOtaInfo();
+        auto parsed=cJSON_Parse(snapshot.c_str());
+        auto version=parsed?cJSON_GetObjectItem(parsed,"installedVersion"):nullptr;
+        const bool ready=cJSON_IsNumber(version) && version->valuedouble>0;
+        cJSON_Delete(parsed);
+        if(ready) break;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
     while (true) {
         auto display = board.GetDisplay();
         while (!network_connected_.load()) {
@@ -131,6 +141,9 @@ void Application::CheckNewVersion() {
 
         // No new version, mark the current version as valid
         ota_->MarkCurrentVersionValid();
+        if (!ota_->GetChassisFirmwareUrl().empty() && !ota_->GetChassisMetadata().empty()) {
+            board.StartChassisAutoUpgrade(ota_->GetChassisFirmwareUrl(), ota_->GetChassisMetadata());
+        }
         if (!ota_->HasActivationCode() && !ota_->HasActivationChallenge()) {
             // Exit the loop if done checking new version
             break;

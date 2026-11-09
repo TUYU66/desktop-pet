@@ -9,12 +9,14 @@ import subprocess
 import sys
 
 TESTS = (
+    'test_esp32_ota_handler', 'test_stm32_ota_handler',
     'test_internal_chat_auth', 'test_service_auth', 'test_chat_submission', 'test_chat_cancellation', 'test_chat_reporting', 'test_tool_coordinator', 'test_tool_history',
-    'test_p3_stream', 'test_asr_serialization', 'test_asr_turn_lifecycle', 'test_memory_v2',
+    'test_robot_transport', 'test_p3_stream', 'test_asr_serialization', 'test_asr_turn_lifecycle', 'test_voice_duplicates', 'test_memory_v2',
     'test_memory_v2_reliability', 'test_reminder_handler', 'test_reminder_group_reply', 'test_reminder_overlap',
     'test_reminder_intent', 'test_web_reminder_reply', 'test_task_completion',
     'test_task_followup', 'test_standby', 'test_voice_interruption_standby',
     'test_weather_context', 'test_music_status_api', 'test_music_lyrics', 'test_web_request_terminals',
+    'test_news_detail_followup', 'test_bluetooth_notice', 'test_wakeup_voice',
 )
 
 

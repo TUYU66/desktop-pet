@@ -23,6 +23,9 @@ def config_for(conn):
 async def run(conn, arguments):
     request_id = uuid.uuid4().hex[:12]
     session = getattr(conn, 'session_id', None)
+    from .followup import user_turn_ids
+    turns = user_turn_ids(conn)
+    turn_id = turns[-1] if turns else None
     conn.news_request_id = request_id
     result = {'requestId': request_id, 'provider': 'newsnow', 'items': [],
               'status': 'failed', 'fetchedAt': datetime.now(timezone.utc).isoformat()}
@@ -38,12 +41,15 @@ async def run(conn, arguments):
         logger.bind(tag=TAG).info('NewsNow 看榜开始: request_id={}, sources={}', request_id, names)
         async with httpx.AsyncClient(timeout=httpx.Timeout(12, connect=3), follow_redirects=True) as client:
             items, warnings = await asyncio.wait_for(_hot(client, config, names, 24, count, ttl), timeout=16)
-        if getattr(conn, 'session_id', None) != session or conn.news_request_id != request_id:
+        latest_turns = user_turn_ids(conn)
+        if (getattr(conn, 'session_id', None) != session or conn.news_request_id != request_id
+                or (latest_turns[-1] if latest_turns else None) != turn_id):
             result.update(status='superseded', message='会话或查询已切换')
             return result
         for index, item in enumerate(items, 1):
             item['itemIndex'] = index
-        conn.news_bulletin = {'session': session, 'savedAt': time.monotonic(), 'items': copy.deepcopy(items)}
+        conn.news_bulletin = {'session': session, 'savedAt': time.monotonic(),
+                              'topicTurnId': turn_id, 'items': copy.deepcopy(items)}
         result.update(items=items, warnings=warnings, requestedSources=names,
                       status=('partial' if warnings else 'ok') if items else 'empty',
                       message=None if items else '当前榜单没有可用条目，不代表相关圈子没有讨论')

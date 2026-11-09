@@ -69,7 +69,7 @@ export default function WakeWordSettings({ onDirtyChange, onWordChange }: { onDi
     finally { setBusy(false); }
   };
   return <section className="settings-inline-section" aria-labelledby="settings-wake-title">
-    <div className="settings-inline-heading"><div><h3 id="settings-wake-title">唤醒设置</h3><p>保存后同步到设备，“你好小智”始终可用。</p></div></div>
+    <div className="settings-inline-heading"><div><h3 id="settings-wake-title">唤醒设置</h3></div></div>
     {loadError ? <Alert type="error" title="无法读取唤醒词，请刷新页面重试" /> : <>
       <label htmlFor="custom-wake-word">自定义唤醒词</label>
       <Input id="custom-wake-word" value={word} onChange={event => { setWord(event.target.value); setPinyin(''); onWordChange(event.target.value); }}

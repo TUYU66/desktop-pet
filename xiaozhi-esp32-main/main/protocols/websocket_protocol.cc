@@ -308,6 +308,7 @@ std::string WebsocketProtocol::GetHelloMessage() {
 #endif
     cJSON_AddBoolToObject(features, "asr_status", true);
     cJSON_AddBoolToObject(features, "service_status", true);
+    cJSON_AddBoolToObject(features, "ota_progress", true);
     cJSON_AddBoolToObject(features, "mcp", true);
 #ifdef CONFIG_USE_DYNAMIC_WAKE_WORD
     cJSON_AddBoolToObject(features, "dynamic_wake_word", true);

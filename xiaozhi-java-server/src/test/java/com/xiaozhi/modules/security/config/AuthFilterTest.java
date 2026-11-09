@@ -17,6 +17,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 class AuthFilterTest {
+    @Test void registrationStatusIsPublicOnlyForItsExactReadRoute() {
+        for (var route: java.util.List.of(
+                new String[]{"GET","/xiaozhi/api/auth/registration-status"},
+                new String[]{"POST","/xiaozhi/api/auth/registration-status"},
+                new String[]{"GET","/xiaozhi/api/auth/registration-status/extra"})) {
+            var exchange=MockServerWebExchange.from(MockServerHttpRequest.method(
+                org.springframework.http.HttpMethod.valueOf(route[0]),route[1]));
+            var called=new AtomicBoolean();
+            StepVerifier.create(new AuthFilter().filter(exchange, x->{called.set(true);return Mono.empty();})).verifyComplete();
+            boolean publicRead=route[0].equals("GET")&&route[1].endsWith("registration-status");
+            assertEquals(publicRead,called.get());
+            if(!publicRead) assertEquals(HttpStatus.UNAUTHORIZED,exchange.getResponse().getStatusCode());
+        }
+    }
     @Test void retiredChatMemoryRoutesRejectEvenValidPythonServiceKey() {
         for (var route : java.util.List.of(
                 new String[]{"POST", "/xiaozhi/api/chat/memory/session1"},
@@ -89,7 +103,7 @@ class AuthFilterTest {
     @Test void ambiguousServiceOwnerIsRejected() { checkService("",null,2L,false); }
     @Test void singleOwnerCompatibilityStillWorks() { checkService("",null,1L,true); }
     @Test void publicCompatibilityKeyCannotSelectAnotherOwner() { checkService("","7",1L,false); }
-    @Test void privateKeyCanBindExplicitOwner() { checkService("private-test-key","7",2L,true); }
+    @Test void privateKeyCannotOverrideAccountConflict() { checkService("private-test-key","7",2L,false); }
 
     private void checkService(String key,String owner,long count,boolean valid) {
         if(key.isEmpty() && owner==null) key="test-private-memory";
@@ -124,6 +138,7 @@ class AuthFilterTest {
             token.setUserId(1L);
             UserEntity user = new UserEntity();
             user.setStatus(1);
+            when(users.selectCount(null)).thenReturn(1L);
             when(tokens.selectOne(any())).thenReturn(token);
             when(users.selectById(1L)).thenReturn(user);
         }

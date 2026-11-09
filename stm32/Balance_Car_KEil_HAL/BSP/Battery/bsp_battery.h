@@ -5,6 +5,7 @@
 
 
 void Battery_init(void);
+int Battery_TryRead(float *voltage);
 float Get_Measure_Volotage(void);
 float Get_Battery_Volotage(void);
 

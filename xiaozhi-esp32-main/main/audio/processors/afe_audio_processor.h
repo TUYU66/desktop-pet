@@ -44,6 +44,8 @@ private:
     std::atomic<bool> is_speaking_{false};
     bool software_reference_ = false;
     int feed_channels_ = 1;
+    // 独立于 AFE feed 的锁：feed 可能等待算法内部缓冲，不能拖住扬声器。
+    std::mutex playback_reference_mutex_;
     std::deque<int16_t> playback_reference_;
     int64_t last_reference_us_ = 0;
     std::vector<int16_t> input_buffer_;

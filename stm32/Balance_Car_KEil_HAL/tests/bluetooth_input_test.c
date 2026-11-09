@@ -32,6 +32,11 @@ void Chassis_BluetoothMove(enCarState state) { ++moves; last_move = state; }
 void delay_ms(int milliseconds) { (void)milliseconds; }
 void UART5_Send_Char(char *text) { snprintf(last_reply, sizeof(last_reply), "%s", text); }
 void ProtocolGetPID(void);
+void Bluetooth_ClearReceive(void) {}
+void AppRuntime_InvalidateBluetooth(void) {}
+int AppRuntime_Send(unsigned int bluetooth, const char *text, unsigned int telemetry) {
+    (void)bluetooth; (void)telemetry; UART5_Send_Char((char *)text); return 1;
+}
 
 #include "../BSP/Bluetooth/app_bluetooth.c"
 
@@ -40,8 +45,10 @@ static void packet(const char *text)
     Bluetooth_DiscardInput();
     while (*text) deal_bluetooth((uint8_t)*text++);
     assert(newLineReceived);
-    ProtocolCpyData();
-    Protocol();
+    char received[80];
+    assert(Bluetooth_TakePacket(received, sizeof(received)));
+    Bluetooth_ExecutePacket(received);
+    assert(!newLineReceived);
 }
 
 int main(void)
@@ -71,6 +78,8 @@ int main(void)
     Stop_Flag = 1;
     packet("$0,0,0,0,0,0,0,1,0,0#");
     assert(moves == 2 && strstr(last_reply, "$BT,EN0,SF1,VB11400,AP1,RQ0,RS0#"));
+    packet("$BC,1,42#");
+    assert(app_request_id == 42 && app_request_target == 1 && Stop_Flag == 1 && moves == 2);
     Stop_Flag = 0;
     packet("$1,0,0,0,1,0,0,AP12,AD3#");
     packet("$0,1,0,0,0,0,0,0,0,0#");
@@ -79,7 +88,7 @@ int main(void)
     /* A complete packet and a partial packet are both discarded at closure. */
     deal_bluetooth('$'); deal_bluetooth('1'); deal_bluetooth(',');
     Bluetooth_DiscardInput();
-    assert(!newLineReceived && !startBit && num == 0 && ProtocolString[0] == 0);
+    assert(!newLineReceived && !startBit && num == 0);
     deal_bluetooth('0'); deal_bluetooth('#');
     assert(!newLineReceived);
     control_enabled = 1;

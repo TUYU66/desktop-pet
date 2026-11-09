@@ -97,7 +97,7 @@ extern float Acceleration_Z;                           		//Z轴加速度计  Z-a
 extern volatile float Mid_Angle;                          				//机械中值  Mechanical median
 extern float Move_X,Move_Z;															//Move_X:前进速度（Forward speed）  Move_Z：转向速度(Turning speed)
 extern volatile float battery; 																	//电池电量	battery level
-extern u8 lower_power_flag; 														//低电压标志,电压恢复标志 Low voltage sign, voltage recovery sign
+extern volatile u8 lower_power_flag; 														//低电压标志,电压恢复标志 Low voltage sign, voltage recovery sign
 extern enCarState g_newcarstate; 												//小车状态标志 Car status indicator
 extern volatile u8 Stop_Flag;																		//停止标志  Stop sign
 extern  float Car_Target_Velocity,Car_Turn_Amplitude_speed; //前进速度 旋转速度  Forward speed and rotational speed

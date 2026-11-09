@@ -78,8 +78,12 @@ public:
     virtual bool UsesBatteryProtectionFlag() const { return false; }
     virtual bool GetLowBatteryFlag(bool& low) { (void)low; return false; }
     virtual bool IsChassisConnected() const { return true; } // Boards without a chassis need no UART readiness gate.
+    virtual void OnBluetoothSpeechResult(unsigned int id, bool played) {}
+    virtual int GetBluetoothControlState() const { return -1; }
     virtual std::string GetMotionHint(bool& busy) { busy = false; return ""; }
     virtual std::string GetSystemInfoJson();
+    virtual std::string GetChassisOtaInfo() { return "{}"; }
+    virtual void StartChassisAutoUpgrade(const std::string& url, const std::string& metadata) {}
     virtual void SetPowerSaveLevel(PowerSaveLevel level) = 0;
     virtual std::string GetBoardJson() = 0;
     virtual std::string GetDeviceStatusJson() = 0;

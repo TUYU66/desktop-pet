@@ -46,6 +46,7 @@ tmp/
 
 # Local reports, screenshots and exported documents (not application sources)
 /output/
+/firmware-releases/
 /xiaozhi-web/output/
 /.local/
 /xiaozhi-python-server/music/
@@ -58,6 +59,7 @@ xiaozhi-esp32-main/.claude/
 stm32/**/Objects/
 stm32/**/Listings/
 stm32/**/DebugConfig/
+stm32/**/Backup/
 *.uvguix.*
 *.o
 *.crf
@@ -69,9 +71,16 @@ stm32/**/DebugConfig/
 *.hex
 stm32/Balance_Car_KEil_HAL/MDK-ARM/Balance_Car_KEil_HAL/
 
-# This public source export contains five code modules only.
+# CubeMX per-workspace metadata and vendor offline manuals
+stm32/**/.mxproject
+stm32/**/*.chm
+
+# Required compiled-in ESP32 prompts (not generated TTS output)
+!xiaozhi-esp32-main/main/assets/common/*.ogg
+!xiaozhi-esp32-main/main/assets/locales/zh-CN/*.ogg
+
+# Public source export only
 /desktop-pet-android/
 /NewNow/
+/docs/
 /xiaozhi-python-server/config.local.yaml
-# Required Bluetooth announcement source assets.
-!xiaozhi-esp32-main/main/assets/common/bt_app_*.ogg

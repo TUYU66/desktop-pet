@@ -206,6 +206,18 @@ esp_err_t Ota::CheckVersion() {
         ESP_LOGW(TAG, "No server_time section found!");
     }
 
+    chassis_firmware_url_.clear();
+    chassis_metadata_.clear();
+    auto chassis = cJSON_GetObjectItem(root, "stm32_firmware");
+    if (cJSON_IsObject(chassis)) {
+        auto url = cJSON_GetObjectItem(chassis, "url");
+        auto metadata = cJSON_GetObjectItem(chassis, "metadata");
+        if (cJSON_IsString(url) && cJSON_IsObject(metadata)) {
+            chassis_firmware_url_ = url->valuestring;
+            char* encoded = cJSON_PrintUnformatted(metadata);
+            if (encoded) { chassis_metadata_ = encoded; cJSON_free(encoded); }
+        }
+    }
     has_new_version_ = false;
     cJSON *firmware = cJSON_GetObjectItem(root, "firmware");
     if (cJSON_IsObject(firmware)) {

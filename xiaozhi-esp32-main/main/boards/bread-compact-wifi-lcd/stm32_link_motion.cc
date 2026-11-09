@@ -29,6 +29,7 @@ std::string Stm32Link::RequestStand() {
 }
 
 std::string Stm32Link::RequestBluetooth(bool enabled) {
+    if (ota_running_.load()) return "底盘正在升级，暂时不能切换蓝牙控制。";
     if (!enabled && started_.load() && uart_mutex_ && request_mutex_) {
         // Revoke first, including while an App rise owns the normal action slot.
         if (xSemaphoreTake(uart_mutex_, pdMS_TO_TICKS(1000)) == pdTRUE) {
@@ -63,7 +64,9 @@ std::string Stm32Link::RequestTurnAround() {
     return RequestMotion("TURN,B");
 }
 
-std::string Stm32Link::RequestMotion(const char* command, unsigned int app_request) {
+std::string Stm32Link::RequestMotion(const char* command, unsigned int app_request, bool for_update) {
+    if (BootRecoveryState() >= 0) return "底盘处于升级恢复模式，请先完成恢复。";
+    if (ota_running_.load() && !for_update) return "底盘正在升级，暂时不能执行动作。";
     const bool standing = strcmp(command, "STAND") == 0;
     const bool turning = strncmp(command, "TURN,", 5) == 0;
     if (!started_.load() || uart_mutex_ == nullptr || request_mutex_ == nullptr ||
@@ -93,7 +96,23 @@ std::string Stm32Link::RequestMotion(const char* command, unsigned int app_reque
             return "正在采集静止零偏，请等待校准结束后再移动。";
     }
     if (!LinkFresh()) return "暂时联系不上底盘，等连接恢复再试。";
-    if (GetMotionSnapshot().busy) return "我还在做上一个动作，等完成再试。";
+    // The request mutex serializes local actions. STM32 performs authoritative
+    // admission checks: queued low-priority DIAG may arrive AFTER TURN_DONE and
+    // still describe the completed turn. Never reject the next step from that
+    // stale snapshot; send it once and honor STM32's current ACK/ERR instead.
+    {
+        std::lock_guard<std::mutex> lock(motion_mutex_);
+        const bool fresh = posture_seen_ &&
+            static_cast<TickType_t>(xTaskGetTickCount() - posture_tick_) <= pdMS_TO_TICKS(1500);
+        // A repeated voice request may be answered from fresh mode AND posture.
+        // App requests still complete their own handshake/announcement once.
+        if (!app_request && strcmp(command, "BT,1") == 0 && fresh && posture_state_ == 1 &&
+            GetBluetoothControlState() == 1)
+            return "蓝牙控制已经开启，可以直接使用 App 操作。";
+        // Posture alone never proves a Bluetooth mode change.
+        if (fresh && standing && posture_state_ == 1) return "我已经站着了。";
+        if (fresh && strcmp(command, "REST") == 0 && posture_state_ == 2) return "我已经坐下了。";
+    }
     const char* action = standing ? "stand_up" : strcmp(command, "REST") == 0 ? "rest" :
         strcmp(command, "TURN,L") == 0 ? "turn_left" : strcmp(command, "TURN,R") == 0 ? "turn_right" :
         strcmp(command, "TURN,B") == 0 ? "turn_around" : strcmp(command, "BT,1") == 0 ? "bluetooth_on" : "bluetooth_off";
@@ -225,7 +244,11 @@ std::string Stm32Link::RequestMotion(const char* command, unsigned int app_reque
         case kAborted: result = "这次动作没能做完。"; break;
         case kSettleAfter: result = "已经转过来了，不过还没稳住。"; break;
         case kNotStable: result = "我还有点晃，等稳一点再转。"; break;
-        case kUnconfirmed: result = "底盘没有这次转向的确认记录，动作结果未确认，请先检查我的状态。"; break;
+        case kUnconfirmed:
+            result = turning ? "底盘没有这次转向的确认记录，动作结果未确认，请先检查我的状态。" :
+                     bluetooth ? "底盘没有这次蓝牙模式切换的确认记录，请先检查控制状态，别连续重试。" :
+                     "底盘没有这次姿态动作的确认记录，请先检查我的状态，别连续重试。";
+            break;
         case kNotReady: result = "我还没准备好，稍等一下再试。"; break;
         case kLowBattery: result = "我电量太低了，先不动啦。"; break;
         case kAngle: result = "我现在歪得有点厉害，扶稳了再试。"; break;
@@ -234,8 +257,13 @@ std::string Stm32Link::RequestMotion(const char* command, unsigned int app_reque
         case kFault: result = "我刚才的动作触发了保护，先帮我检查一下。"; break;
         case kBusy: result = "我还在做上一个动作，等完成再试。"; break;
         case kBluetoothActive: result = "现在由手机控制，先关闭蓝牙控制再让我做动作吧。"; break;
-        case kNoReply: result = turning ? "我没收到转向完成确认，请先看看我的状态，别连续重试。"
-                                       : "我没收到动作确认，不确定有没有执行，请先看看我的状态。"; break;
+        case kNoReply:
+            result = turning ? "我没收到转向完成确认，请先看看我的状态，别连续重试。" :
+                     bluetooth ? (accepted
+                         ? "底盘已接收蓝牙切换指令，但还没确认完成，请先检查控制状态。"
+                         : "没有收到底盘对蓝牙切换指令的应答，请检查底盘连接，别连续重试。")
+                     : "我没收到动作确认，不确定有没有执行，请先看看我的状态。";
+            break;
         default: result = "我这次没能动起来，先别连续重试。"; break;
         }
     }

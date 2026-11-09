@@ -29,6 +29,8 @@ public:
 
     const std::string& GetFirmwareVersion() const { return firmware_version_; }
     const std::string& GetCurrentVersion() const { return current_version_; }
+    const std::string& GetChassisFirmwareUrl() const { return chassis_firmware_url_; }
+    const std::string& GetChassisMetadata() const { return chassis_metadata_; }
     const std::string& GetFirmwareUrl() const { return firmware_url_; }
     const std::string& GetActivationMessage() const { return activation_message_; }
     const std::string& GetActivationCode() const { return activation_code_; }
@@ -48,6 +50,7 @@ private:
     std::string current_version_;
     std::string firmware_version_;
     std::string firmware_url_;
+    std::string chassis_firmware_url_, chassis_metadata_;
     std::string activation_challenge_;
     std::string serial_number_;
     int activation_timeout_ms_ = 30000;  // 服务端建议的激活等待上限。

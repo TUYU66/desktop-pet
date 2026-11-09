@@ -25,5 +25,5 @@ void bsp_services_init(void)
 {
     bluetooth_init();
     ChassisLink_Init();
-    TIM6_Init();
+    /* MonitorTask owns periodic housekeeping; TIM6 stays stopped. */
 }

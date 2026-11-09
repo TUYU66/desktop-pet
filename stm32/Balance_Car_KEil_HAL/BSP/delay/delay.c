@@ -4,7 +4,7 @@ static uint32_t cycles_per_us;
 
 void delay_init(void)
 {
-    /* SysTick belongs exclusively to HAL's 1 ms time base. I2C/OLED delays
+    /* SysTick belongs to FreeRTOS; TIM7 supplies HAL time. I2C/OLED delays
      * must never change its clock, reload value, or enable state. */
     cycles_per_us = SystemCoreClock / 1000000U;
     if (cycles_per_us == 0U) cycles_per_us = 1U;

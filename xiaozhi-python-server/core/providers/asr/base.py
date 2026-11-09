@@ -131,6 +131,9 @@ class ASRProviderBase(ABC):
         """执行ASR识别"""
         generation = getattr(conn, 'input_generation', 0)
         session = conn.session_id
+        wake_echo = getattr(conn, "pending_wake_echo", None)
+        conn.pending_wake_echo = None
+        recognition_started = time.monotonic()
         try:
             count_voice(conn, 'asr_start')
             total_start_time = time.monotonic()
@@ -171,11 +174,17 @@ class ASRProviderBase(ABC):
             logger.bind(tag=TAG).debug(f"总处理耗时: {total_time:.3f}s")
 
             # 检查文本长度
-            text_len, _ = remove_punctuation_and_length(content_for_length_check)
+            text_len, normalized_text = remove_punctuation_and_length(content_for_length_check)
             self.stop_ws_connection()
 
             if text_len > 0:
                 count_voice(conn, 'asr_text')
+                if (wake_echo and wake_echo[2] == session
+                        and 0 <= recognition_started - wake_echo[1] <= 8
+                        and normalized_text == wake_echo[0]):
+                    logger.bind(tag=TAG).info("忽略本次唤醒后的重复唤醒词识别")
+                    await self._send_recognition_state(conn, "done")
+                    return
                 audio_snapshot = asr_audio_task.copy()
                 enqueue_asr_report(conn, enhanced_text, audio_snapshot)
                 # 使用自定义模块进行上报

@@ -110,7 +110,8 @@ async def send_mcp_message(conn: "ConnectionHandler", payload: dict):
 
     try:
         await conn.websocket.send(message)
-        logger.bind(tag=TAG).debug(f"成功发送MCP消息: {message}")
+        logged = "[固件升级参数已隐藏]" if payload.get("params", {}).get("name") in ("self.chassis.ota_start", "self.upgrade_firmware") else message
+        logger.bind(tag=TAG).debug(f"成功发送MCP消息: {logged}")
     except Exception as e:
         logger.bind(tag=TAG).error(f"发送MCP消息失败: {e}")
 
@@ -309,7 +310,7 @@ async def call_mcp_tool(
 
     # Only authenticated manual calibration/tuning endpoints may request hidden
     # operator tool. Never add it to the conversational client's tools catalog.
-    hidden_operator = operator_only and tool_name in {"self.chassis.calibration", "self.chassis.tuning", "self.chassis.tuning_state"}
+    hidden_operator = operator_only and tool_name in {"self.chassis.calibration", "self.chassis.tuning", "self.chassis.tuning_state", "self.chassis.ota_start", "self.chassis.ota_state", "self.get_system_info", "self.upgrade_firmware"}
     if not mcp_client.has_tool(tool_name) and not hidden_operator:
         raise ValueError(f"工具 {tool_name} 不存在")
 
@@ -374,13 +375,14 @@ async def call_mcp_tool(
         "params": {"name": actual_name, "arguments": arguments},
     }
 
-    if actual_name not in {"self.dashboard.get_state", "self.chassis.tuning_state"}:
-        logger.bind(tag=TAG).info(f"发送客户端mcp工具调用请求: {actual_name}，参数: {args}")
+    if actual_name not in {"self.dashboard.get_state", "self.chassis.tuning_state", "self.chassis.ota_state"}:
+        logged_args = "[固件升级参数已隐藏]" if actual_name in ("self.chassis.ota_start", "self.upgrade_firmware") else args
+        logger.bind(tag=TAG).info(f"发送客户端mcp工具调用请求: {actual_name}，参数: {logged_args}")
     try:
         await send_mcp_message(conn, payload)
         # Wait for response or timeout
         raw_result = await asyncio.wait_for(result_future, timeout=timeout)
-        if actual_name not in {"self.dashboard.get_state", "self.chassis.tuning_state"}:
+        if actual_name not in {"self.dashboard.get_state", "self.chassis.tuning_state", "self.chassis.ota_state"}:
             logger.bind(tag=TAG).info(
                 f"客户端mcp工具调用 {actual_name} 成功，原始结果: {raw_result}"
             )

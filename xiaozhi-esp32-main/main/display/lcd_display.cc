@@ -247,6 +247,14 @@ MipiLcdDisplay::MipiLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel
 LcdDisplay::~LcdDisplay() {
     {
         DisplayLockGuard lock(this);
+        if (upgrade_finish_timer_) {
+            lv_timer_delete(upgrade_finish_timer_);
+            upgrade_finish_timer_ = nullptr;
+        }
+        if (upgrade_panel_) {
+            lv_obj_delete(upgrade_panel_);
+            upgrade_panel_ = nullptr;
+        }
         robo_eyes_.reset();
         StopSubtitleScroll();
         if (subtitle_clear_timer_) {
@@ -294,6 +302,9 @@ LcdDisplay::~LcdDisplay() {
     }
     if (status_bar_ != nullptr) {
         lv_obj_del(status_bar_);
+    }
+    if (bluetooth_icon_label_ != nullptr) {
+        lv_obj_del(bluetooth_icon_label_);
     }
     if (top_bar_ != nullptr) {
         lv_obj_del(top_bar_);
@@ -409,7 +420,32 @@ void LcdDisplay::UpdateStatusBar(bool update_all) {
     bool charging = false;
     bool discharging = false;
     const bool available = Board::GetInstance().GetBatteryLevel(percent, charging, discharging);
+    const int bluetooth = Board::GetInstance().GetBluetoothControlState();
     DisplayLockGuard lock(this);
+    // Keep the Bluetooth control icon beside Wi-Fi, independent of subtitles.
+    if (top_bar_ && network_label_ && bluetooth == 1 && !bluetooth_icon_label_) {
+        bluetooth_icon_label_ = lv_label_create(top_bar_);
+        lv_label_set_text(bluetooth_icon_label_, FONT_AWESOME_BLUETOOTH);
+        lv_obj_add_flag(bluetooth_icon_label_, LV_OBJ_FLAG_FLOATING);
+        lv_obj_set_style_pad_all(bluetooth_icon_label_, 0, 0);
+        lv_obj_set_style_bg_opa(bluetooth_icon_label_, LV_OPA_TRANSP, 0);
+        lv_obj_set_style_border_width(bluetooth_icon_label_, 0, 0);
+        lv_obj_set_style_outline_width(bluetooth_icon_label_, 0, 0);
+    }
+    if (bluetooth_icon_label_ && network_label_) {
+        lv_obj_set_style_text_font(bluetooth_icon_label_, lv_obj_get_style_text_font(network_label_, LV_PART_MAIN), 0);
+        if (bluetooth == 1) {
+            lv_obj_set_style_text_color(bluetooth_icon_label_, lv_color_hex(0x75C9FF), 0);
+            lv_obj_remove_flag(bluetooth_icon_label_, LV_OBJ_FLAG_HIDDEN);
+        } else if (bluetooth == 0) {
+            lv_obj_add_flag(bluetooth_icon_label_, LV_OBJ_FLAG_HIDDEN);
+        } else if (!lv_obj_has_flag(bluetooth_icon_label_, LV_OBJ_FLAG_HIDDEN)) {
+            // Amber means the previous ON state can no longer be confirmed.
+            lv_obj_set_style_text_color(bluetooth_icon_label_, lv_color_hex(0xF0C674), 0);
+        }
+        lv_obj_update_layout(top_bar_);
+        lv_obj_align_to(bluetooth_icon_label_, network_label_, LV_ALIGN_OUT_RIGHT_MID, 6, 0);
+    }
     if (!battery_percent_label_) return;
     if (!available) {
         lv_label_set_text(battery_percent_label_, "");

@@ -36,3 +36,17 @@ float Get_Battery_Volotage(void)
 	temp = temp * 4.03f;    //temp*(10+3.3)/3.3; 
 	return temp;
 }
+
+int Battery_TryRead(float *voltage)
+{
+    uint16_t raw;
+    if (HAL_ADC_Start(&hadc1) != HAL_OK) return 0;
+    if (HAL_ADC_PollForConversion(&hadc1, 2) != HAL_OK) {
+        HAL_ADC_Stop(&hadc1);
+        return 0;
+    }
+    raw = (uint16_t)HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_Stop(&hadc1);
+    *voltage = (float)raw * (3.30f / 4096.0f) * 4.03f;
+    return 1;
+}

@@ -120,7 +120,7 @@ export default function Settings() {
         prompt: role.prompt, voice: values.voice, wakeWords: '你好小智' });
       setRoles(updated);
       setDirty(false);
-      message.success('配置已保存，当前交互结束后应用；切换角色后需重新唤醒');
+      message.success('配置已保存，当前交互结束后应用');
     } catch (error) {
       message.error(error instanceof Error ? error.message : '保存失败，请重试');
     } finally {
@@ -130,7 +130,6 @@ export default function Settings() {
 
   return <div className="settings-page page-width">
     <div className="page-heading"><div><h1>桌面宠物设置<PageDoodle kind="settings" /></h1></div></div>
-    <Typography.Paragraph type="secondary">设置伙伴的名字、说话方式、唤醒词和设备音量。名字与唤醒词分别设置。</Typography.Paragraph>
     {loading && <Spin />}
     {loadFailed && <Alert type="error" title="无法读取配置"
       description="请检查管理后端是否启动。加载成功后才能编辑，避免覆盖原有配置。"
@@ -146,7 +145,7 @@ export default function Settings() {
           </Form.Item>
           <Form.Item name="voice" label="音色"><Select options={VOICE_GROUPS} /></Form.Item>
           <Space wrap><Button type="primary" htmlType="submit" loading={saving}>保存配置</Button>
-            <Typography.Text type="secondary">{dirty ? '有未保存的修改' : '保存角色设置不会清除聊天记录。'}</Typography.Text></Space>
+            {dirty && <Typography.Text type="secondary">有未保存的修改</Typography.Text>}</Space>
         </Form>
         <div className="settings-inline-grid">
           <WakeWordSettings onDirtyChange={setWakeDirty} onWordChange={setPreviewWakeWord} />

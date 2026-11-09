@@ -8,7 +8,6 @@ const Login = lazy(() => import('../pages/login/Login'));
 const Dashboard = lazy(() => import('../pages/dashboard/Dashboard'));
 const OtaList = lazy(() => import('../pages/ota/OtaList'));
 const ChatRoom = lazy(() => import('../pages/chat/ChatRoom'));
-const DeviceList = lazy(() => import('../pages/device/DeviceList'));
 const Settings = lazy(() => import('../pages/settings/Settings'));
 const Account = lazy(() => import('../pages/account/Account'));
 const MemoryList = lazy(() => import('../pages/memory/MemoryList'));
@@ -39,7 +38,6 @@ export default function AppRouter() {
           <Route path="/music" element={<LazyLoad><Music /></LazyLoad>} />
           <Route path="/reminders" element={<LazyLoad><Reminders /></LazyLoad>} />
           <Route path="/settings" element={<LazyLoad><Settings /></LazyLoad>} />
-          <Route path="/device" element={<LazyLoad><DeviceList /></LazyLoad>} />
           <Route path="/account" element={<LazyLoad><Account /></LazyLoad>} />
           <Route path="/ota" element={<LazyLoad><OtaList /></LazyLoad>} />
         </Route>

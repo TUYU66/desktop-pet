@@ -1,6 +1,10 @@
 #include "chassis_link.h"
 #include "AllHeader.h"
+#ifdef PET_OTA_APPLICATION
+#include "../../OTA/common/ota_version.h"
+#endif
 #include "link_frame.h"
+#include "app_runtime.h"
 #include "calibration_deadline.h"
 #include "tuning_values.h"
 #include <stdio.h>
@@ -8,14 +12,15 @@
 
 /* Both peers require wire v2 CRC frames. Never execute legacy/raw commands. */
 #define CHASSIS_LINE_CAPACITY 128
-#define CHASSIS_RX_CAPACITY 128
+#define CHASSIS_RX_CAPACITY 512
 
-static char line[CHASSIS_LINE_CAPACITY];
+static char line[CHASSIS_LINE_CAPACITY]; /* ActionTask only. */
+static char receive_line[CHASSIS_LINE_CAPACITY]; /* ReceiveTask only. */
 static uint8_t line_length;
 static uint8_t dropping_line;
 static uint8_t rx_buffer[CHASSIS_RX_CAPACITY];
-static volatile uint8_t rx_head;
-static volatile uint8_t rx_tail;
+static volatile uint16_t rx_head;
+static volatile uint16_t rx_tail;
 static volatile uint8_t rx_overflow;
 static uint32_t last_battery_report_ms;
 static unsigned int battery_sequence;
@@ -74,20 +79,14 @@ static const char *start_error_name(u8 result)
 
 static void send_line(const char *message)
 {
-    /* Foreground-only TX; keep the frame off the 1 KB main/IRQ stack. */
-    static char frame[208];
-    size_t length = strcspn(message, "\r\n");
-    size_t i;
-    int written;
-    if (length == 0 || length > sizeof(frame) - 8) return;
-    written = snprintf(frame, sizeof(frame), "@%.*s*%04X\n", (int)length,
-                       message, (unsigned int)link_crc16(message, length));
-    if (written <= 0 || (size_t)written >= sizeof(frame)) return;
-    for (i = 0; i < (size_t)written; ++i)
-    {
-        while (!LL_USART_IsActiveFlag_TXE(USART2)) {}
-        LL_USART_TransmitData8(USART2, (uint8_t)frame[i]);
-    }
+    unsigned int low = !strncmp(message, "DIAG,", 5) ||
+                       !strncmp(message, "TSTATE,0,", 9);
+    AppRuntime_Send(0, message, low);
+}
+
+void ChassisLink_SendDiagnostic(const char *message)
+{
+    if (message && strncmp(message, "DIAG,", 5) == 0) send_line(message);
 }
 
 static uint8_t parse_sequence(const char *digits, unsigned int *sequence)
@@ -320,7 +319,7 @@ static void tuning_reply(unsigned int seq, unsigned int error)
         __set_PRIMASK(irq);
         captured=Chassis_FormatGyro(text,sizeof(text),tuning_revision);
     } while (captured!=tuning_known_gyro_revision);
-    send_line(text);
+    AppRuntime_Send(0, text, seq == 0);
     /* Send the ACK last, after gyro state is available to the ESP32. */
     snprintf(text,sizeof(text),"TSTATE,%u,%u,%lu,%u,%u,%u,%ld,%ld,%ld,%ld,%ld,%ld\n",
              seq,error,(unsigned long)(HAL_GetTick()&0x7FFFFFFFUL),tuning_revision,
@@ -391,6 +390,16 @@ static void handle_tuning(void)
 
 static void handle_line(void)
 {
+#ifdef PET_OTA_APPLICATION
+    if (strncmp(line, "OTA_ENTER,", 10) == 0) {
+        unsigned int sequence;
+        extern int OtaEntry_Request(void);
+        if (!parse_sequence(line + 10, &sequence)) return;
+        (void)OtaEntry_Request(); /* Successful entry resets and never returns. */
+        stand_reply(sequence, "OTA_UNSAFE");
+        return;
+    }
+#endif
     if (strncmp(line, "TUNE,", 5) == 0) { handle_tuning(); return; }
     if (strncmp(line, "CAL,", 4) == 0) { handle_calibration(); return; }
     if ((Chassis_CalibrationActive() || Chassis_GyroActive()) &&
@@ -561,7 +570,7 @@ static void handle_line(void)
             stand_reply(sequence, "LOW_BATT");
         else
         {
-            /* Same startup path as KEY1; ISR still enforces the angle limit. */
+            /* Explicit STAND uses the validated balance-start path. */
             u8 result = Chassis_StartBalance();
             if (result) { stand_reply(sequence, start_error_name(result)); return; }
             posture_sequence = sequence;
@@ -634,16 +643,24 @@ static void handle_line(void)
     }
     else if (strncmp(line, "POSTURE_RESULT,", 15) == 0) {
         unsigned int sequence;
-        if (!parse_sequence(line + 15, &sequence)) return;
+        if (!parse_sequence(line + 15, &sequence) || sequence == 0) return;
         if (sequence == posture_result_sequence && posture_result[0] &&
             (uint32_t)(HAL_GetTick() - posture_result_ms) < 60000U) send_line(posture_result);
         else if (sequence == posture_sequence) stand_reply(sequence, 0);
+        else {
+            /* Absence of a record is not proof that no motor action occurred.
+             * Report it explicitly so the peer does not wait silently or retry. */
+            char response[40];
+            snprintf(response, sizeof(response), "POSTURE_UNKNOWN,%u\n", sequence);
+            send_line(response);
+        }
     }
 }
 
 void ChassisLink_Init(void)
 {
-    MX_USART2_UART_Init();
+    if (!LL_USART_IsEnabled(USART2)) MX_USART2_UART_Init();
+    LL_USART_DisableIT_RXNE(USART2);
     rx_head = 0;
     rx_tail = 0;
     rx_overflow = 0;
@@ -665,6 +682,9 @@ void ChassisLink_Init(void)
     }
     last_link_error_total = 0;
     last_link_report_ms = HAL_GetTick();
+    /* Discard bytes/errors accumulated before the AppTask started. */
+    (void)USART2->SR;
+    (void)LL_USART_ReceiveData8(USART2);
     LL_USART_EnableIT_RXNE(USART2);
 }
 
@@ -676,7 +696,7 @@ void ChassisLink_OnRxInterrupt(void)
     if (status & (USART_SR_RXNE | USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE))
     {
         uint8_t ch = (uint8_t)USART2->DR;
-        uint8_t next = (uint8_t)((rx_head + 1) % CHASSIS_RX_CAPACITY);
+        uint16_t next = (uint16_t)((rx_head + 1) % CHASSIS_RX_CAPACITY);
         if (status & (USART_SR_ORE | USART_SR_FE | USART_SR_NE | USART_SR_PE))
         {
             if (status & USART_SR_ORE) link_errors[2]++;
@@ -702,7 +722,7 @@ void ChassisLink_OnRxInterrupt(void)
 void ChassisLink_Poll(void)
 {
     /* Bound work per foreground iteration so Bluetooth still gets service. */
-    uint8_t remaining = 32;
+
     Chassis_CalibrationWatchdog();
     Chassis_GyroWatchdog();
     Chassis_BluetoothWatchdog();
@@ -798,50 +818,6 @@ void ChassisLink_Poll(void)
         else if (event == 2) send_line("REST_ABORT\n");
         else if (event == 3) send_line("REST_FAULT\n");
     }
-    if (rx_overflow)
-    {
-        uint32_t irq = __get_PRIMASK();
-        __disable_irq();
-        rx_overflow = 0;
-        rx_tail = rx_head;
-        __set_PRIMASK(irq);
-        line_length = 0;
-        dropping_line = 1;
-    }
-    while (remaining-- && rx_tail != rx_head)
-    {
-        char ch = (char)rx_buffer[rx_tail];
-        rx_tail = (uint8_t)((rx_tail + 1) % CHASSIS_RX_CAPACITY);
-        if (ch == '@')
-        {
-            if (!dropping_line && line_length) link_errors[7]++;
-            line_length = 0;
-            dropping_line = 0;
-        }
-        else if (ch == '\n')
-        {
-            if (!dropping_line && line_length)
-            {
-                int decoded = link_decode(line, line_length);
-                if (decoded == 1) handle_line();
-                else if (decoded == -1) link_errors[0]++;
-                else link_errors[1]++;
-            }
-            line_length = 0;
-            dropping_line = 1;
-        }
-        else if (!dropping_line)
-        {
-            if (line_length < sizeof(line) - 1)
-                line[line_length++] = ch;
-            else
-            {
-                dropping_line = 1;
-                link_errors[1]++;
-            }
-        }
-    }
-
     if ((uint32_t)(HAL_GetTick() - last_link_report_ms) >= 5000U)
     {
         static char report[160];
@@ -864,12 +840,29 @@ void ChassisLink_Poll(void)
     }
 
     /* Repeat identity/config for late captures and ESP32 restarts.
-     * Capabilities: mix=1, PI reset=2, BT posture=4, observations=8, manual calibration=16, measured compensation=32, BT session posture=64, unknown turn reply=128, tuning/live=256, manual gyro zero=512, dedicated support rise=1024.
+     * Capabilities: mix=1, PI reset=2, BT posture=4, observations=8, manual calibration=16, measured compensation=32, BT session posture=64, unknown turn reply=128, tuning/live=256, manual gyro zero=512, dedicated support rise=1024, posture snapshot=2048, unknown posture reply=4096.
      * Revision marks source capabilities, not physical acceptance. */
+#ifdef PET_OTA_APPLICATION
+    {
+        static uint32_t last_ota_version_ms;
+        if ((uint32_t)(HAL_GetTick() - last_ota_version_ms) >= 1000U) {
+            char version_line[40];
+            last_ota_version_ms = HAL_GetTick();
+            snprintf(version_line, sizeof(version_line), "DIAG,OTA,%lu\n", (unsigned long)PET_OTA_FIRMWARE_VERSION);
+            send_line(version_line);
+        }
+    }
+#endif
     if ((uint32_t)(HAL_GetTick() - last_baseline_report_ms) >= 10000U) {
         static char baseline[192];
         last_baseline_report_ms = HAL_GetTick();
-        send_line("DIAG,FW,2026101201,2,2047\n");
+#ifdef PET_OTA_APPLICATION
+        send_line("DIAG,FW,2026110405,2,16383\n");
+        snprintf(baseline, sizeof(baseline), "DIAG,OTA,%lu\n", (unsigned long)PET_OTA_FIRMWARE_VERSION);
+        send_line(baseline);
+#else
+        send_line("DIAG,FW,2026102701,2,8191\n");
+#endif
         Chassis_FormatBaseline(baseline, sizeof(baseline));
         send_line(baseline);
         Motor_FormatCompensation(baseline, sizeof(baseline));
@@ -899,6 +892,8 @@ void ChassisLink_Poll(void)
          * beneath snprintf and an interrupt on the small MCU stack. */
         static char motion[160], sensors[192], control[192], observations[192], calibration[192];
         last_diagnostic_ms = HAL_GetTick();
+        Chassis_FormatState(motion, sizeof(motion));
+        send_line(motion);
         tuning_reply(0,0);
         Chassis_FormatDiagnostics(motion, sizeof(motion), sensors, sizeof(sensors));
         send_line(motion);
@@ -934,4 +929,83 @@ void ChassisLink_Poll(void)
                  millivolts, (unsigned int)Stop_Flag, (unsigned int)lower_power_flag);
         send_line(report);
     }
+}
+
+void ChassisLink_ReceivePoll(void)
+{
+    unsigned int remaining = 128;
+    if (rx_overflow)
+    {
+        uint32_t irq = __get_PRIMASK();
+        __disable_irq();
+        rx_overflow = 0;
+        rx_tail = rx_head;
+        __set_PRIMASK(irq);
+        line_length = 0;
+        dropping_line = 1;
+    }
+    while (remaining-- && rx_tail != rx_head)
+    {
+        char ch = (char)rx_buffer[rx_tail];
+        rx_tail = (uint16_t)((rx_tail + 1) % CHASSIS_RX_CAPACITY);
+        if (ch == '@')
+        {
+            if (!dropping_line && line_length) link_errors[7]++;
+            line_length = 0;
+            dropping_line = 0;
+        }
+        else if (ch == '\n')
+        {
+            if (!dropping_line && line_length)
+            {
+                int decoded = link_decode(receive_line, line_length);
+                if (decoded == 1) AppRuntime_PostCommand(0, receive_line);
+                else if (decoded == -1) link_errors[0]++;
+                else link_errors[1]++;
+            }
+            line_length = 0;
+            dropping_line = 1;
+        }
+        else if (!dropping_line)
+        {
+            if (line_length < sizeof(receive_line) - 1)
+                receive_line[line_length++] = ch;
+            else
+            {
+                dropping_line = 1;
+                link_errors[1]++;
+            }
+        }
+    }
+
+}
+
+void ChassisLink_ExecuteCommand(const char *text)
+{
+    if (!text || strlen(text) >= sizeof(line)) return;
+    strcpy(line, text);
+    handle_line();
+}
+
+void ChassisLink_RejectCommand(const char *text, const char *reason)
+{
+    unsigned int sequence;
+    const char *field = 0;
+    char digits[8];
+    size_t length;
+    if (!strncmp(text, "STAND,", 6)) field = text + 6;
+    else if (!strncmp(text, "REST,", 5)) field = text + 5;
+    else if (!strncmp(text, "TURN,", 5) && strlen(text) >= 8) field = text + 7;
+    else if (!strncmp(text, "BT,", 3) && strlen(text) >= 6) field = text + 5;
+    else if (!strncmp(text, "TUNE,", 5) || !strncmp(text, "CAL,", 4)) {
+        const char *subcommand = strchr(text, ',');
+        field = subcommand ? strchr(subcommand + 1, ',') : 0;
+        if (field) ++field;
+    }
+    if (!field) return;
+    length = strcspn(field, ",");
+    if (!length || length >= sizeof(digits)) return;
+    memcpy(digits, field, length);
+    digits[length] = 0;
+    if (parse_sequence(digits, &sequence) && sequence) stand_reply(sequence, reason);
 }

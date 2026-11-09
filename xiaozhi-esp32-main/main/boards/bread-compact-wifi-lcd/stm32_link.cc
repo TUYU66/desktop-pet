@@ -4,6 +4,7 @@
 #include "mcp_server.h"
 #include "board.h"
 #include "display.h"
+#include "settings.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -25,54 +26,11 @@
 using namespace stm32_link_detail;
 namespace stm32_link_detail {
 
-std::atomic<bool> bluetooth_prompt_active{false};
-std::atomic<uint32_t> bluetooth_prompt_epoch{0};
-void InterruptBluetoothPrompt() {
-    auto& audio = Application::GetInstance().GetAudioService();
-    if (bluetooth_prompt_active.load() && audio.GetPlaybackEpoch() == bluetooth_prompt_epoch.load()) audio.ResetDecoder();
-}
-extern const char bt_on_start[] asm("_binary_bt_app_on_ogg_start");
-extern const char bt_on_end[] asm("_binary_bt_app_on_ogg_end");
-extern const char bt_ready_start[] asm("_binary_bt_app_ready_ogg_start");
-extern const char bt_ready_end[] asm("_binary_bt_app_ready_ogg_end");
-extern const char bt_off_start[] asm("_binary_bt_app_off_ogg_start");
-extern const char bt_off_end[] asm("_binary_bt_app_off_ogg_end");
-extern const char bt_failed_start[] asm("_binary_bt_app_failed_ogg_start");
-extern const char bt_failed_end[] asm("_binary_bt_app_failed_ogg_end");
-
-bool PlayBluetoothPrompt(const char* text, const char* begin, const char* end, std::function<bool()> current) {
-    auto& app = Application::GetInstance();
-    const auto state = app.GetDeviceState();
-    // Do not mix a local announcement into a server reply, music or audio test.
-    if ((state != kDeviceStateIdle && state != kDeviceStateListening) || app.IsVoiceDetected()) return false;
-    auto& audio = app.GetAudioService();
-    if (!audio.WaitForPlaybackQueueEmpty(1500) || !current()) return false;
-    const bool awake = app.IsConversationAwake();
-    const bool wake_running = audio.IsWakeWordRunning();
-    const bool voice_running = audio.IsAudioProcessorRunning();
-    if (wake_running) audio.EnableWakeWordDetection(false);
-    if (voice_running) audio.EnableVoiceProcessing(false, false);
-    auto restore = [&]() {
-        bluetooth_prompt_active.store(false);
-        if (app.GetDeviceState() == state && app.IsConversationAwake() == awake) {
-            if (voice_running) audio.EnableVoiceProcessing(true, false);
-            else if (wake_running) audio.EnableWakeWordDetection(true);
-        }
-    };
-    try {
-        const auto epoch = audio.GetPlaybackEpoch();
-        bluetooth_prompt_epoch.store(epoch);
-        bluetooth_prompt_active.store(true);
-        app.Schedule([message = std::string(text)]() {
-            auto display = Board::GetInstance().GetDisplay();
-            display->SetChatMessage("assistant", message.c_str());
-        });
-        audio.PlaySound(std::string_view(begin, static_cast<size_t>(end - begin)), current);
-        const bool played = audio.WaitForPlaybackQueueEmpty(9000);
-        vTaskDelay(pdMS_TO_TICKS(100)); // Let the local prompt's acoustic tail settle.
-        restore();
-        return played && current() && audio.GetPlaybackEpoch() == epoch && app.GetDeviceState() == state && app.IsConversationAwake() == awake;
-    } catch (...) { restore(); return false; }
+std::atomic<unsigned int> bluetooth_notice_id{0};
+std::atomic<int> bluetooth_notice_result{0};
+void CancelBluetoothAnnouncement() {
+    const auto id = bluetooth_notice_id.exchange(0);
+    if (id) Application::GetInstance().SendBluetoothControlEvent(id, false, false, true);
 }
 
 }
@@ -84,8 +42,18 @@ Stm32Link& Stm32Link::GetInstance() {
 
 void Stm32Link::Start() {
     if (started_.exchange(true)) return;
+    {
+        Settings saved("stm32_ota");
+        std::lock_guard<std::mutex> lock(ota_mutex_);
+        ota_job_=saved.GetString("job");ota_phase_=saved.GetString("phase","idle");
+        ota_version_=saved.GetString("version");ota_error_=saved.GetString("error");
+        ota_progress_=ota_phase_=="completed"?100:0;
+        if(saved.GetBool("pending",false)) {
+            ota_phase_="unconfirmed";ota_error_="上次升级因 ESP32 重启中断，结果未知，请核对底盘状态";
+        }
+    }
 
-    ESP_LOGI(kTag, "ESP32 chassis diagnostic revision=2026101201 built=%s %s", __DATE__, __TIME__);
+    ESP_LOGI(kTag, "ESP32 chassis diagnostic revision=2026102601 built=%s %s", __DATE__, __TIME__);
     uart_config_t config = {};
     config.baud_rate = 115200;
     config.data_bits = UART_DATA_8_BITS;
@@ -168,31 +136,69 @@ void Stm32Link::SendAppBluetoothResult(unsigned int id, bool success) {
     xSemaphoreGive(uart_mutex_);
 }
 
+void Stm32Link::OnBluetoothSpeechResult(unsigned int id, bool played) {
+    if (bluetooth_notice_id.load() == id && app_bluetooth_id_.load() == id)
+        bluetooth_notice_result.store(played ? 1 : -1);
+}
+
+bool Stm32Link::AnnounceAppBluetooth(const AppBluetoothRequest& request, bool success) {
+    if (app_bluetooth_id_.load() != request.id) return false;
+    bluetooth_notice_result.store(0);
+    bluetooth_notice_id.store(request.id);
+    Application::GetInstance().SendBluetoothControlEvent(request.id, request.enabled, success);
+    const auto deadline = xTaskGetTickCount() + pdMS_TO_TICKS(15000);
+    while (app_bluetooth_id_.load() == request.id && bluetooth_notice_id.load() == request.id &&
+           bluetooth_notice_result.load() == 0 && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0)
+        vTaskDelay(pdMS_TO_TICKS(20));
+    const bool played = app_bluetooth_id_.load() == request.id && bluetooth_notice_id.load() == request.id &&
+        bluetooth_notice_result.load() == 1 && Application::GetInstance().GetAudioService().WaitForPlaybackQueueEmpty(2000);
+    ESP_LOGI(kTag, "App BLE announcement id=%u enabled=%d confirmed=%d played=%d ack=%d current=%u",
+             request.id, request.enabled, success, played, bluetooth_notice_result.load(), app_bluetooth_id_.load());
+    if (played) bluetooth_notice_id.store(0);
+    else CancelBluetoothAnnouncement();
+    return played;
+}
+
 void Stm32Link::RunAppBluetooth(const AppBluetoothRequest& request) {
     if (app_bluetooth_id_.load() != request.id) return;
-    const auto current = [this, id = request.id]() { return app_bluetooth_id_.load() == id; };
-    const bool already_enabled = bluetooth_mode_.load() == 1 &&
-        static_cast<TickType_t>(xTaskGetTickCount() - bluetooth_tick_.load()) <= pdMS_TO_TICKS(1500);
-    const bool announce = request.enabled ? !already_enabled : true;
-    if (announce && !PlayBluetoothPrompt(request.enabled ? "进入蓝牙控制模式，准备好后就可以用 App 控制我了。" : "退出蓝牙控制模式。",
-                                       request.enabled ? bt_on_start : bt_off_start, request.enabled ? bt_on_end : bt_off_end, current) && request.enabled) {
-        SendAppBluetoothResult(request.id, false); return;
-    }
-    if (!request.enabled) {
+    if (request.enabled) {
+        auto& app = Application::GetInstance();
+        const auto deadline = xTaskGetTickCount() + pdMS_TO_TICKS(4000);
+        bool ready = false;
+        while (app_bluetooth_id_.load() == request.id) {
+            const auto state = app.GetDeviceState();
+            if ((state == kDeviceStateIdle || state == kDeviceStateListening) && !app.IsVoiceDetected() &&
+                app.GetAudioService().WaitForPlaybackQueueEmpty(100)) {
+                ready = true;
+                break;
+            }
+            if (static_cast<int32_t>(deadline - xTaskGetTickCount()) <= 0) break;
+            vTaskDelay(pdMS_TO_TICKS(20));
+        }
+        if (app_bluetooth_id_.load() != request.id) return;
+        if (!ready) {
+            ESP_LOGW(kTag, "App BLE request id=%u busy after 4 s: state=%d voice=%d", request.id,
+                     static_cast<int>(app.GetDeviceState()), app.IsVoiceDetected());
+            SendAppBluetoothResult(request.id, false); return;
+        }
+    } else {
         const auto deadline = xTaskGetTickCount() + pdMS_TO_TICKS(5000);
         while (GetMotionSnapshot().busy && static_cast<int32_t>(deadline - xTaskGetTickCount()) > 0 &&
                app_bluetooth_id_.load() == request.id) vTaskDelay(pdMS_TO_TICKS(20));
     }
-    if (app_bluetooth_id_.load() != request.id) return; // OFF/new request fenced the old announcement.
+    if (app_bluetooth_id_.load() != request.id) return;
     const auto result = RequestMotion(request.enabled ? "BT,1" : "BT,0", request.id);
     const bool success = request.enabled ? result == "已经站稳，蓝牙控制已开启，可以用手机 App 操控了。" :
         result == "手机移动控制已关闭，保持站立。" || result == "手机移动控制已关闭，我已经坐下了。";
-    SendAppBluetoothResult(request.id, success);
     if (app_bluetooth_id_.load() != request.id) return;
-    if (success && request.enabled)
-        PlayBluetoothPrompt("现在可以用 App 控制我了。", bt_ready_start, bt_ready_end, current);
-    else if (!success)
-        PlayBluetoothPrompt("这次还没准备好，请看一下我的状态。", bt_failed_start, bt_failed_end, current);
+    if (!success) {
+        SendAppBluetoothResult(request.id, false);
+        AnnounceAppBluetooth(request, false);
+        return;
+    }
+    // Current server TTS voice owns speech/subtitles. No embedded voice fallback.
+    const bool announced = AnnounceAppBluetooth(request, true);
+    if (app_bluetooth_id_.load() == request.id) SendAppBluetoothResult(request.id, announced);
 }
 
 std::string Stm32Link::GetBatteryText() const {
@@ -217,6 +223,12 @@ bool Stm32Link::GetBatteryLevel(int& percent) const {
 bool Stm32Link::LinkFresh() const {
     const TickType_t tick = last_frame_tick_.load();
     return connected_.load() && static_cast<TickType_t>(xTaskGetTickCount() - tick) <= pdMS_TO_TICKS(5000);
+}
+
+int Stm32Link::GetBluetoothControlState() const {
+    if (!LinkFresh() || static_cast<TickType_t>(xTaskGetTickCount() - bluetooth_tick_.load()) > pdMS_TO_TICKS(1500))
+        return -1;
+    return bluetooth_mode_.load();
 }
 
 bool Stm32Link::BatteryFresh() const {
@@ -314,6 +326,7 @@ std::string Stm32Link::GetMotionHint(bool& busy) const {
 }
 
 std::string Stm32Link::GetStatusJson() const {
+    const TickType_t now = xTaskGetTickCount();
     const bool connected = LinkFresh();
     const bool valid = BatteryFresh();
     const auto motion = GetMotionSnapshot();
@@ -322,7 +335,12 @@ std::string Stm32Link::GetStatusJson() const {
         std::lock_guard<std::mutex> lock(motion_mutex_);
         const bool fresh = connected && motion_seen_ &&
             static_cast<TickType_t>(xTaskGetTickCount() - motion_tick_) <= pdMS_TO_TICKS(1500);
-        if (fresh && !motion.busy && motion_phase_ == 0 && motion_error_ == 0) {
+        const bool explicit_fresh = connected && posture_seen_ &&
+            static_cast<TickType_t>(now - posture_tick_) <= pdMS_TO_TICKS(1500);
+        if (explicit_fresh) {
+            static const char* names[] = {"unknown", "standing", "seated", "rising", "resting", "fault"};
+            posture = names[posture_state_];
+        } else if (!posture_seen_ && fresh && !motion.busy && motion_phase_ == 0 && motion_error_ == 0) {
             if (motion_stopped_ && motion_rest_ == 2) posture = "seated";
             else if (!motion_stopped_ && motion_rest_ == 0) posture = "standing";
         }

@@ -4,10 +4,10 @@
   "model": {"type" : "funasr"},
   "pipeline": {"type":"funasr-pipeline"},
   "model_name_in_hub": {
-    "ms":"",
+    "ms":"", 
     "hf":""},
   "file_path_metas": {
-    "init_param":"model.pt",
+    "init_param":"model.pt", 
     "config":"config.yaml",
     "tokenizer_conf": {"bpemodel": "chn_jpn_yue_eng_ko_spectok.bpe.model"},
     "frontend_conf":{"cmvn_file": "am.mvn"}}

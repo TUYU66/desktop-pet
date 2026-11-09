@@ -6,6 +6,8 @@ import com.xiaozhi.common.exception.ErrorCode;
 import com.xiaozhi.common.result.Result;
 import com.xiaozhi.modules.ota.entity.FirmwareEntity;
 import com.xiaozhi.modules.ota.service.FirmwareService;
+import com.xiaozhi.modules.ota.service.Esp32Firmware;
+import com.xiaozhi.modules.ota.service.Stm32FirmwarePackage;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
@@ -65,7 +67,7 @@ public class OtaController {
         deviceVersion = nestedString(systemInfo, "application", "version", deviceVersion);
         FirmwareEntity latest = boardType == null || boardType.isBlank()
                 ? null : firmwareService.getLatestVersion(boardType);
-        if (latest != null && (deviceVersion == null || !latest.getVersion().equals(deviceVersion))) {
+        if (latest != null && Esp32Firmware.newer(latest.getVersion(), deviceVersion)) {
             String dlHost = host != null ? host.split(":")[0] : "localhost";
             result.put("firmware", Map.of(
                     "version", latest.getVersion(),
@@ -74,6 +76,24 @@ public class OtaController {
             ));
         }
 
+        // 只依据当前连接报告的底盘发布版本检查；没有真实版本时不猜测、不自动升级。
+        if (systemInfo != null && systemInfo.get("stm32") instanceof Map<?,?> chassis &&
+                chassis.get("installedVersion") instanceof Number installed && installed.longValue()>0 &&
+                Boolean.TRUE.equals(chassis.get("chassisReady")) && !Boolean.TRUE.equals(chassis.get("active"))) {
+            var stm32 = firmwareService.getLatestVersion(Stm32FirmwarePackage.BOARD_TYPE);
+            if (stm32 != null) {
+                try {
+                    var validated = Stm32FirmwarePackage.read(java.nio.file.Path.of(stm32.getFilePath()));
+                    if (validated.compiledVersion() && validated.version() > installed.longValue()) {
+                        result.put("stm32_firmware", Map.of("url", "http://" + wsHost + ":" + serverPort +
+                                "/xiaozhi/ota/stm32/download/" + firmwareService.generateDownloadToken(stm32.getId()),
+                                "metadata", validated.metadata()));
+                    }
+                } catch (Exception ignored) {
+                    // 不合法的历史上传记录不阻断 ESP32 启动；手动升级会显示具体失败原因。
+                }
+            }
+        }
         return result;
     }
 
@@ -138,7 +158,6 @@ public class OtaController {
 
     @PostMapping("/xiaozhi/api/admin/firmware")
     public Mono<Result<?>> uploadFirmware(
-            @RequestPart("version") String version,
             @RequestPart(value = "description", required = false) String description,
             @RequestPart("boardType") String boardType,
             @RequestPart(value = "forceUpdate", required = false) String forceUpdate,
@@ -160,7 +179,14 @@ public class OtaController {
         return filePart.transferTo(target)
                 .then(Mono.<Result<?>>fromCallable(() -> {
                     FirmwareEntity entity = new FirmwareEntity();
-                    entity.setVersion(version);
+                    if (!Esp32Firmware.BOARD.equals(boardType)) throw new IllegalArgumentException("ESP32 板型不匹配");
+                    var info = Esp32Firmware.read(target.toPath());
+                    var latest = firmwareService.getLatestVersion(boardType);
+                    if (latest != null && !Esp32Firmware.newer(info.version(), latest.getVersion()) &&
+                            latest.getVersion().matches("[0-9]+\\.[0-9]+\\.[0-9]+")) {
+                        throw new IllegalArgumentException("该版本已存在或低于已发布版本，请生成新版本固件后上传");
+                    }
+                    entity.setVersion(info.version());
                     entity.setDescription(description);
                     entity.setBoardType(boardType);
                     entity.setForceUpdate(forceUpdate != null ? Integer.parseInt(forceUpdate) : 0);
@@ -169,7 +195,11 @@ public class OtaController {
                     entity.setStatus(1);
                     entity.setCreateDate(LocalDateTime.now());
                     firmwareService.save(entity);
-                    return Result.ok();
+                    return Result.ok(entity);
+                }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic()))
+                .onErrorResume(error -> Mono.<Result<?>>fromCallable(() -> {
+                    java.nio.file.Files.deleteIfExists(target.toPath());
+                    return Result.error(error instanceof IllegalArgumentException ? error.getMessage() : "固件上传失败");
                 }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic()));
     }
 

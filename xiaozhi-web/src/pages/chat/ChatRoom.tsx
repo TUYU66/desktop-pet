@@ -300,7 +300,7 @@ export default function ChatRoom() {
   }), [visibleMessages, conversation.name, conversation.userAvatar, conversation.botAvatar]);
 
   const chatHeading = <div className='chat-heading'><ChatAvatar value={conversation.botAvatar} robot size={36} />
-        <div className='chat-persona'><h2 title={conversation.name}>{conversation.name}</h2><p>在网页输入，由桌面宠物出声回复</p></div>
+        <div className='chat-persona'><h2 title={conversation.name}>{conversation.name}</h2></div>
         <PageDoodle kind="chat" />
         <Tag color={activeSessions?.has(conversation.session || '') ? 'success' : 'default'} icon={<WifiOutlined />}>{connectionLabel}</Tag>
         <Link className='chat-avatar-link' to='/settings' aria-label='设置对话头像'><SettingOutlined /> 头像设置</Link>
@@ -315,7 +315,7 @@ export default function ChatRoom() {
           disabled={!dates.ready || deleting} disabledDate={value => !dateSet.has(value.format('YYYY-MM-DD'))}
           onChange={value => setSelectedDate(value?.format('YYYY-MM-DD') || '')} />
         {selectedDate && <Button type='link' onClick={() => setSelectedDate('')}>全部日期</Button>}
-        <span className='chat-date-hint'>{dates.loading ? '正在核对记录日期…' : dates.ready ? '北京时间 · 灰色日期没有记录' : '记录日期待核实'}</span>
+        <span className='chat-date-hint'>{dates.loading ? '正在核对记录日期…' : dates.ready ? '北京时间' : '记录日期待核实'}</span>
         <Space className='chat-record-actions' wrap><Button size='small' icon={<ReloadOutlined />} onClick={refreshRecords}
           title='刷新聊天记录' aria-label='刷新聊天记录'
           disabled={!conversation.session || deleting} loading={history.loading}><span className='chat-action-label'>刷新记录</span></Button>
@@ -362,7 +362,7 @@ export default function ChatRoom() {
           placeholder={'和' + conversation.name + '说点什么…'} autoSize={{ minRows: 1, maxRows: 4 }} />
         <div className='composer-toolbar'><span className='composer-hint'>{posting && !activeRequest ? '正在提交另一段对话，请稍候。'
           : connectionError || (blocked && !posting ? '处理期间可发送“别说了”或“待命一下” · Enter 发送'
-            : '网页文字聊天需要在线设备 · Enter 发送 · Shift + Enter 换行')}</span>
+            : 'Enter 发送 · Shift + Enter 换行')}</span>
           <Button type='primary' icon={<SendOutlined />} onClick={() => void handleSend()} loading={posting}
             disabled={!inputText.trim() || sendBlocked || deleting}>发送消息</Button></div>
       </div> : <div className='history-notice'><span>正在连接当前对话。</span><Button type='link' loading={configLoading} onClick={() => void refreshConfig(true)}>重新加载</Button></div>}

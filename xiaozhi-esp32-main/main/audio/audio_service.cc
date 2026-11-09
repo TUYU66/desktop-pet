@@ -263,6 +263,7 @@ void AudioService::AudioInputTask() {
 
 void AudioService::AudioOutputTask() {
     int64_t last_gap_log = 0;
+    std::vector<int16_t> reference;
     // 播放任务按固定节奏从 playback 队列取 PCM，队列为空时不会向 I2S 写垃圾数据。
     while (true) {
         std::unique_lock<std::mutex> lock(audio_queue_mutex_);
@@ -296,7 +297,7 @@ void AudioService::AudioOutputTask() {
             if (reference_resampler_ != nullptr) {
                 uint32_t samples = 0;
                 esp_ae_rate_cvt_get_max_out_sample_num(reference_resampler_, task->pcm.size(), &samples);
-                std::vector<int16_t> reference(samples);
+                reference.resize(samples);
                 auto result = esp_ae_rate_cvt_process(reference_resampler_,
                     (esp_ae_sample_t)task->pcm.data(), task->pcm.size(),
                     (esp_ae_sample_t)reference.data(), &samples);

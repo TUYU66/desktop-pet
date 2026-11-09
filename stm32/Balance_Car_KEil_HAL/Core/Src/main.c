@@ -19,6 +19,7 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "cmsis_os.h"
 #include "adc.h"
 #include "tim.h"
 #include "usart.h"
@@ -52,6 +53,7 @@
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void MX_FREERTOS_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -60,14 +62,14 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN 0 */
 
 
-uint8_t GET_Angle_Way=2;                             //»ñÈ¡½Ç¶ÈµÄËã·¨£¬1£ºËÄÔªÊý  2£º¿¨¶ûÂü  3£º»¥²¹ÂË²¨  //Algorithm for obtaining angles, 1: Quaternion 2: Kalman 3: Complementary filtering
-float Angle_Balance,Gyro_Balance,Gyro_Turn;     		//Æ½ºâÇã½Ç Æ½ºâÍÓÂÝÒÇ ×ªÏòÍÓÂÝÒÇ //Balance tilt angle balance gyroscope steering gyroscope
-int Motor_Left,Motor_Right;                 	  		//µç»úPWM±äÁ¿ //Motor PWM variable
-int Temperature;                                		//ÎÂ¶È±äÁ¿ 		//Temperature variable
-float Acceleration_Z;                           		//ZÖá¼ÓËÙ¶È¼Æ  //Z-axis accelerometer
-volatile float Mid_Angle = +2.1f;                       						//»úÐµÖÐÖµ  //Mechanical median
-float Move_X,Move_Z; //Move_X:Ç°½øËÙ¶È  Move_Z£º×ªÏòËÙ¶È  //Move_X: Forward speed Move_Z: Steering speed
-volatile u8 Stop_Flag = 1; //0:¿ªÊ¼ 1:Í£Ö¹  //0: Start 1: Stop
+uint8_t GET_Angle_Way=2;                             //ï¿½ï¿½È¡ï¿½Ç¶Èµï¿½ï¿½ã·¨ï¿½ï¿½1ï¿½ï¿½ï¿½ï¿½Ôªï¿½ï¿½  2ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½  3ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë²ï¿½  //Algorithm for obtaining angles, 1: Quaternion 2: Kalman 3: Complementary filtering
+float Angle_Balance,Gyro_Balance,Gyro_Turn;     		//Æ½ï¿½ï¿½ï¿½ï¿½ï¿½ Æ½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ×ªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ //Balance tilt angle balance gyroscope steering gyroscope
+int Motor_Left,Motor_Right;                 	  		//ï¿½ï¿½ï¿½PWMï¿½ï¿½ï¿½ï¿½ //Motor PWM variable
+int Temperature;                                		//ï¿½Â¶È±ï¿½ï¿½ï¿½ 		//Temperature variable
+float Acceleration_Z;                           		//Zï¿½ï¿½ï¿½ï¿½Ù¶È¼ï¿½  //Z-axis accelerometer
+volatile float Mid_Angle = +2.1f;                       						//ï¿½ï¿½Ðµï¿½ï¿½Öµ  //Mechanical median
+float Move_X,Move_Z; //Move_X:Ç°ï¿½ï¿½ï¿½Ù¶ï¿½  Move_Zï¿½ï¿½×ªï¿½ï¿½ï¿½Ù¶ï¿½  //Move_X: Forward speed Move_Z: Steering speed
+volatile u8 Stop_Flag = 1; //0:ï¿½ï¿½Ê¼ 1:Í£Ö¹  //0: Start 1: Stop
 
 
 /* USER CODE END 0 */
@@ -78,6 +80,7 @@ volatile u8 Stop_Flag = 1; //0:¿ªÊ¼ 1:Í£Ö¹  //0: Start 1: Stop
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
 
   /* USER CODE END 1 */
@@ -106,22 +109,24 @@ int main(void)
   MX_TIM8_Init();
   MX_USART1_UART_Init();
   MX_ADC1_Init();
+  MX_UART5_Init();
+  MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  //ÖØÐÂ×Ô¶¯Éú³ÉµÄ´®¿Ú³õÊ¼»¯¼ÇµÃÉ¾µô,²»ÒªÓ°Ïì³ÌÐòÖ´ÐÐ
+  //ï¿½ï¿½ï¿½ï¿½ï¿½Ô¶ï¿½ï¿½ï¿½ï¿½ÉµÄ´ï¿½ï¿½Ú³ï¿½Ê¼ï¿½ï¿½ï¿½Çµï¿½É¾ï¿½ï¿½,ï¿½ï¿½ÒªÓ°ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½
 	//Remember to delete the automatically generated serial port initialization so as not to affect program execution
   bsp_init();
-  bsp_services_init(); // Installed Bluetooth and battery timer.
-  MPU6050_EXTI_Init();//Æ½ºâ·þÎñ  Balanced Services
-  OLED_Draw_Line("put down key start!", 2, false, true);
-  while(Stop_Flag==1)
-  {
-    ChassisLink_Poll();
-    if (Key1_State(1) && !Chassis_CalibrationKeyBlocked() && !Chassis_StartBalance()) break;
-  }
-  /* KEY1 and UART only leave the startup loop after an accepted start. */
-  OLED_Draw_Line("start control!        ", 2, false, true);
-
+  OLED_Draw_Line("RTOS: create", 2, true, true);
+  /* Services and the IMU interrupt start only after AppTask is running. */
   /* USER CODE END 2 */
+
+  /* Init scheduler */
+  osKernelInitialize();  /* Call init function for freertos objects (in cmsis_os2.c) */
+  MX_FREERTOS_Init();
+
+  /* Start scheduler */
+  osKernelStart();
+
+  /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
@@ -130,7 +135,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	 app_user();
+    /* Scheduler startup failure must never run the chassis unscheduled. */
+    Error_Handler();
 
   }
   /* USER CODE END 3 */
@@ -160,6 +166,7 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -186,6 +193,33 @@ void SystemClock_Config(void)
 /* USER CODE END 4 */
 
 /**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM7 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+  BSP_TimerPeriodElapsed(htim);
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM7)
+  {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+  if (htim->Instance == TIM7)
+  {
+    Chassis_CalibrationWatchdog();
+  }
+
+  /* USER CODE END Callback 1 */
+}
+
+/**
   * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
@@ -194,14 +228,16 @@ void Error_Handler(void)
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
+  Stop_Flag = 1;
+  Motor_Left = Motor_Right = 0;
+  Set_Pwm(0, 0);
   while (1)
   {
   }
   /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
-/** 
+#ifdef USE_FULL_ASSERT
+/**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
   * @param  file: pointer to the source file name
@@ -216,5 +252,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

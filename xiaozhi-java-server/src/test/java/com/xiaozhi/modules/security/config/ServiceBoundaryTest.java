@@ -69,6 +69,7 @@ class ServiceBoundaryTest {
         var filter=new AuthFilter(); var tokens=mock(UserTokenDao.class); var users=mock(UserDao.class);
         var token=new UserTokenEntity(); token.setUserId(7L);
         var user=new UserEntity(); user.setId(7L); user.setStatus(1); user.setSuperAdmin(0);
+        when(users.selectCount(null)).thenReturn(1L);
         when(tokens.selectOne(any())).thenReturn(token); when(users.selectById(7L)).thenReturn(user);
         ReflectionTestUtils.setField(filter,"userTokenDao",tokens); ReflectionTestUtils.setField(filter,"userDao",users);
         var exchange=MockServerWebExchange.from(MockServerHttpRequest.get("/xiaozhi/api/admin/firmware").header("Authorization","Bearer test"));

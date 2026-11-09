@@ -72,11 +72,10 @@ export default function VolumeControl() {
   };
 
   return <section className="settings-inline-section" aria-labelledby="settings-volume-title">
-    <div className="settings-inline-heading"><div><h3 id="settings-volume-title">扬声器音量</h3><p>连接设备后自动读取当前音量。</p></div><Button size="small" disabled={busy} onClick={() => setRefreshKey(key => key + 1)}>刷新状态</Button></div>
+    <div className="settings-inline-heading"><div><h3 id="settings-volume-title">扬声器音量</h3></div><Button size="small" disabled={busy} onClick={() => setRefreshKey(key => key + 1)}>刷新状态</Button></div>
     {devices.length > 1 && <Select aria-label="选择音量控制设备" value={device || undefined} placeholder="选择在线设备" allowClear disabled={busy} options={devices.map(id => ({ value: id, label: id }))} onChange={id => setDevice(id || '')} style={{ width: '100%', marginBottom: 12 }} />}
     <div className="settings-volume-heading"><span id="settings-volume-label">音量</span><output>{value ?? volume ?? (loading ? '读取中' : '未上报')}</output></div>
     <Slider ariaLabelledByForHandle="settings-volume-label" min={0} max={100} value={value ?? volume ?? 0} onChange={setValue} onChangeComplete={target => void apply(target)} disabled={!enabled} />
-    <p className="settings-control-hint">松开滑条后发送，设备确认后更新实际数值。</p>
     {error && <Alert type="warning" title={error} />}
     {feedback && <div aria-live="polite"><Alert type={busy ? 'info' : error ? 'warning' : 'success'} title={feedback} /></div>}
   </section>;

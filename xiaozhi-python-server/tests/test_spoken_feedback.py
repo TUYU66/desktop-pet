@@ -11,11 +11,20 @@ from core.handle.sendAudioHandle import _do_send_audio
 
 
 class SpokenFeedbackTests(unittest.TestCase):
-    def test_bluetooth_entry_announces_mode_and_app_without_claiming_completion(self):
+    def test_stand_acknowledgement_is_neutral_until_device_confirms(self):
+        self.assertEqual('好。', chassis_acknowledgement('self_chassis_stand_up'))
+        self.assertEqual('站起来啦。', chassis_outcome('self_chassis_stand_up', '起立完成。'))
+        self.assertEqual('我已经站着了。', chassis_outcome('self_chassis_stand_up', '我已经站着了。'))
+
+    def test_bluetooth_voice_entry_waits_for_confirmed_stance_before_inviting_app(self):
         text=chassis_acknowledgement('self_chassis_bluetooth_on')
-        self.assertIn('蓝牙控制模式',text)
-        self.assertIn('App',text)
+        self.assertEqual('好。',text)
+        self.assertNotIn('App',text)
         self.assertNotIn('已经站稳',text)
+        confirmed='已经站稳，蓝牙控制已开启，可以用手机 App 操控了。'
+        self.assertEqual('已准备好，请打开 App 连接机器人。',
+                         chassis_outcome('self_chassis_bluetooth_on',confirmed))
+        self.assertNotIn('已准备好',chassis_outcome('self_chassis_bluetooth_on','起立还没完成，蓝牙控制没有开启。'))
 
     def test_repeat_notice_and_single_notice_keep_content_without_duplicate_punctuation(self):
         first=reminder_announcement({'text':'吃饭。','deliveryNumber':1})
@@ -97,7 +106,7 @@ class SpokenFeedbackTests(unittest.TestCase):
 class AudioGapTests(unittest.IsolatedAsyncioTestCase):
     async def test_expected_music_transition_does_not_hide_later_starvation(self):
         logger=Mock()
-        conn=NS(logger=logger,conn_from_mqtt_gateway=False,websocket=NS(send=AsyncMock()))
+        conn=NS(logger=logger,websocket=NS(send=AsyncMock()))
         flow={'sentence_id':'reminder','packet_count':3,'buffered_until':1,
               'expected_gap':'reminder_music_start'}
         with patch('core.handle.sendAudioHandle.time.monotonic',side_effect=[2,4]):

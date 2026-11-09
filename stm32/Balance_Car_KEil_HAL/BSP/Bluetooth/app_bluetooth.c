@@ -1,6 +1,7 @@
 #include "app_bluetooth.h"
 #include "../ChassisLink/chassis_link.h"
 #include <stdlib.h>
+#include "app_runtime.h"
 
 #define 	run_car     '1'//按键前 Before pressing the button
 #define 	back_car    '2'//按键后 After pressing the button
@@ -17,7 +18,6 @@ char lspeed[10],rspeed[10],daccel[10],dgyro[10],csb[10],vi[10];
 volatile u8 newLineReceived = 0;
 int num = 0;
 u8 startBit = 0;
-int int9num =0;
 u8 inputString[80] = {0};
 u8 ProtocolString[80] = {0};
 
@@ -90,19 +90,6 @@ void deal_bluetooth(uint8_t value)
     }
 }
 
-void ProtocolCpyData(void)
-{
-    uint32_t irq = __get_PRIMASK();
-    __disable_irq();
-    memset(ProtocolString, 0, sizeof(ProtocolString));
-    if (newLineReceived) memcpy(ProtocolString, inputString, (size_t)num);
-    int9num = num - 1;
-    num = 0;
-    startBit = 0;
-    newLineReceived = 0;
-    __set_PRIMASK(irq);
-}
-
 void Bluetooth_DiscardInput(void)
 {
     uint32_t irq = __get_PRIMASK();
@@ -111,7 +98,8 @@ void Bluetooth_DiscardInput(void)
     startBit = 0;
     num = 0;
     inputString[0] = 0;
-    ProtocolString[0] = 0;
+    Bluetooth_ClearReceive();
+    AppRuntime_InvalidateBluetooth();
     __set_PRIMASK(irq);
 }
 
@@ -302,7 +290,7 @@ void SendAutoUp(void)
 	if ((g_autoup == 1) && (g_uptimes == 0))
 	{
 		CalcUpData();
-		UART5_Send_Char(updata); //返回协议数据包	Return protocol data packet
+		AppRuntime_Send(1, updata, 1); //返回协议数据包	Return protocol data packet
 	}
 	if(g_uptimes == 0)
 		 g_uptimes = 1;
@@ -402,3 +390,25 @@ void ProtocolGetPID(void)
 
 
 
+
+int Bluetooth_TakePacket(char *out, unsigned int capacity)
+{
+    int copied = 0;
+    uint32_t mask = __get_PRIMASK();
+    __disable_irq();
+    if (newLineReceived && num > 0 && (unsigned int)num < capacity) {
+        memcpy(out, inputString, (size_t)num);
+        out[num] = 0;
+        copied = 1;
+    }
+    if (newLineReceived) { newLineReceived = 0; num = 0; startBit = 0; }
+    __set_PRIMASK(mask);
+    return copied;
+}
+void Bluetooth_ExecutePacket(const char *text)
+{
+    size_t length = strlen(text);
+    if (length >= sizeof(ProtocolString)) return;
+    memcpy(ProtocolString, text, length + 1);
+    Protocol();
+}

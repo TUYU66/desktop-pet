@@ -175,11 +175,5 @@ public class UserController {
                 .onErrorReturn(Result.ok(Map.of("state", "unreachable", "word", word)));
     }
 
-    @GetMapping("/pub-config")
-    public Result<Map<String, Object>> pubConfig() {
-        Map<String, Object> config = new HashMap<>();
-        config.put("version", "1.0.0");
-        config.put("enableMobileRegister", true);
-        return Result.ok(config);
-    }
+
 }

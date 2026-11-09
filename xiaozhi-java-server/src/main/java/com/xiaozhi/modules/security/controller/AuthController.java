@@ -6,8 +6,11 @@ import com.xiaozhi.common.exception.ErrorCode;
 import com.xiaozhi.modules.security.service.TokenService;
 import com.xiaozhi.modules.user.entity.UserEntity;
 import com.xiaozhi.modules.user.service.UserService;
-import jakarta.annotation.Resource;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
+import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import lombok.Data;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -19,14 +22,17 @@ import java.util.Map;
 @RequestMapping("/xiaozhi/api/auth")
 public class AuthController {
 
-    @Resource
-    private UserService userService;
+    private final UserService userService;
+    private final TokenService tokenService;
 
-    @Resource
-    private TokenService tokenService;
+    public AuthController(UserService userService, TokenService tokenService) {
+        this.userService = userService;
+        this.tokenService = tokenService;
+    }
 
     @PostMapping("/login")
     public Result<Map<String, Object>> login(@RequestBody LoginRequest req) {
+        if (userService.registrationState().accountConflict()) throw new BusinessException(ErrorCode.ACCOUNT_CONFLICT);
         UserEntity user = userService.findByUsername(req.getUsername());
         if (user == null) {
             throw new BusinessException(ErrorCode.USER_NOT_FOUND);
@@ -50,10 +56,18 @@ public class AuthController {
         return Result.ok(data);
     }
 
+    @GetMapping("/registration-status")
+    public Mono<Result<UserService.RegistrationState>> registrationStatus() {
+        return Mono.fromCallable(() -> Result.ok(userService.registrationState()))
+            .subscribeOn(Schedulers.boundedElastic());
+    }
+
     @PostMapping("/register")
-    public Result<?> register(@RequestBody RegisterRequest req) {
-        userService.register(req.getUsername(), req.getPassword());
-        return Result.ok();
+    public Mono<Result<Void>> register(@Valid @RequestBody RegisterRequest req) {
+        return Mono.fromCallable(() -> {
+            userService.register(req.getUsername(), req.getPassword());
+            return Result.<Void>ok();
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     @PostMapping("/logout")
@@ -78,8 +92,10 @@ class LoginRequest {
 @Data
 class RegisterRequest {
     @NotBlank(message = "用户名不能为空")
+    @Size(max = 50, message = "用户名不超过50字符")
     private String username;
     @NotBlank(message = "密码不能为空")
+    @Size(min = 6, max = 72, message = "密码至少6字符且不超过72字符")
     private String password;
     private String email;
     private String mobile;

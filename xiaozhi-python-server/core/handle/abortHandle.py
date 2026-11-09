@@ -25,7 +25,7 @@ async def handleAbortMessage(conn: "ConnectionHandler", *, standby=False):
     catchup = getattr(conn, 'task_followup_audio_task', None)
     if catchup and not catchup.done():
         catchup.cancel()
-    for attr in ('task_followup_task', 'reminder_delivery_task'):
+    for attr in ('task_followup_task', 'reminder_delivery_task', '_bluetooth_notice_task'):
         task = getattr(conn, attr, None)
         if task and task is not asyncio.current_task() and not task.done():
             task.cancel()

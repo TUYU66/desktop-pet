@@ -161,6 +161,7 @@ std::string Board::GetSystemInfoJson() {
     }
     json += R"(},)";
 
+    json += R"("stm32":)" + GetChassisOtaInfo() + ",";
     json += R"("board":)" + GetBoardJson();
 
     // Close the JSON object

@@ -51,7 +51,7 @@ public class ReminderStore {
 
     /** 现有设备表不是完整多租户绑定，首版只允许唯一启用账户使用提醒。 */
     public void requireOwner(long owner) {
-        var owners=jdbc.queryForList("SELECT id FROM sys_user WHERE status=1",Long.class);
+        var owners=jdbc.queryForList("SELECT id FROM sys_user WHERE status=1 AND (SELECT COUNT(*) FROM sys_user)=1",Long.class);
         if(owners.size()!=1||owners.get(0)!=owner) throw new IllegalArgumentException("提醒首版需要唯一启用账户及其设备");
     }
     public List<Map<String,Object>> devices(long owner) {

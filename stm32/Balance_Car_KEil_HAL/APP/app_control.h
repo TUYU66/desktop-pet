@@ -44,6 +44,7 @@ void Chassis_BluetoothWatchdog(void);
 void Chassis_TurnWatchdog(void);
 u8 Chassis_TurnFailurePhase(void);
 u8 Chassis_PostureResult(u8 standing);
+void Chassis_FormatState(char *text, unsigned int size);
 void Chassis_FormatDiagnostics(char *motion, unsigned int motion_size,
                                char *sensors, unsigned int sensors_size);
 void Chassis_FormatControlDiagnostics(char *text, unsigned int size,
@@ -57,7 +58,6 @@ extern volatile u8 chassis_turn_error; /* See TURN_ABORT reason mapping in chass
 /* Returns 0 when the raw sensor frame could not be read. */
 u8 Get_Angle(u8 way);
 int Pick_Up(float Acceleration,float Angle,int encoder_left,int encoder_right);
-int Put_Down(float Angle,int encoder_left,int encoder_right);
 
 
 #endif

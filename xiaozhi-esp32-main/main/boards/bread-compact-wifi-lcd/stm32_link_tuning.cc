@@ -42,6 +42,7 @@ std::string Stm32Link::RequestCalibration(const std::string& operation, int whee
         return std::string("{\"ok\":") + (code == 0 ? "true" : "false") +
             ",\"errorCode\":" + std::to_string(code) + ",\"state\":" + GetCalibrationJson() + "}";
     };
+    if (ota_running_.load()) return result(5);
     const bool arm = operation == "arm", set = operation == "set", exit = operation == "exit";
     if ((!arm && !set && !exit) || wheel < 1 || wheel > 2 || pwm < -2600 || pwm > 2600) return result(7);
     if (arm && !confirmed) return result(9);
@@ -157,6 +158,7 @@ std::string Stm32Link::RequestTuning(const std::string& operation, unsigned int 
         if (gyro && (!gyro_seen_ || static_cast<TickType_t>(xTaskGetTickCount()-gyro_tick_)>pdMS_TO_TICKS(1500)))
             return "{\"ok\":false,\"errorCode\":1}";
     }
+    if (ota_running_.load()) return result(2);
     if (GetMotionSnapshot().busy || calibration_active_.load()) return result(2);
     if (!McpServer::GetInstance().CurrentCallIsValid()) return result(7);
     uint16_t seq=next_sequence_.fetch_add(1);

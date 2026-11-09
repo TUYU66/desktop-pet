@@ -2,7 +2,9 @@
 
 ESP32-S3 负责唤醒、收音、播音与 LCD 表情，STM32 负责平衡及运动，Python 处理语音和对话，Java 保存配置、记忆与日程，网页提供聊天和设备操作入口。
 
-本次上传包含五个代码模块，不包含 Android App、独立 NewsNow 部署、私人配置、用户数据及构建产物。
+本仓库包含五个代码模块，不包含 Android App、独立 NewsNow 部署、私人配置、用户数据及构建产物。
+
+一套服务器只服务一台机器人、一个账户。首次注册创建管理员，完成初始化后关闭注册入口。
 
 ## 实物展示
 
@@ -94,8 +96,8 @@ Python 模型权重不随仓库分发：准备 SenseVoiceSmall 与 Silero VAD，
 - Python：在环境中进入 `xiaozhi-python-server`，安装 `requirements.txt` 后运行 `python app.py`；WebSocket 默认 8001，内部 HTTP 默认仅监听本机 8004。
 - 网页：`npm --prefix xiaozhi-web ci`，再运行 `npm --prefix xiaozhi-web run dev`，默认 5173。
 - 网易云桥接：在 `xiaozhi-python-server/netease-api` 执行 `npm ci`，桥接由 Python 调用。
-- ESP32：在 ESP-IDF 5.5.2 环境中进入固件目录配置板型，运行 `idf.py build`；四个 `bt_app_*.ogg` 为必需的编译资源，已包含。
-- STM32：打开 `stm32/Balance_Car_KEil_HAL/MDK-ARM/Balance_Car_KEil_HAL.uvprojx`，使用 Keil 构建。烧录、串口和供电由操作者选择。
+- ESP32：在 ESP-IDF 5.5.2 环境中进入固件目录运行 `idf.py build`。当前固定为 ESP32-S3 面包板 LCD 版本，必需的内置提示音已纳入源码；旧蓝牙固定播报已退役。
+- STM32：打开 `stm32/Balance_Car_KEil_HAL/MDK-ARM/Balance_Car_KEil_HAL.uvprojx`，已集成 FreeRTOS 和 OTA，依赖均使用相对路径。独立 Bootloader 工程位于 `Bootloader/MDK-ARM/PetBootloader.uvprojx`。首次安装使用发布命令生成的 `factory-stage2.hex` 整包，普通应用 BIN 不是首次安装整包。
 
 NewsNow 为可选外部新闻服务，本次不分发其独立部署目录。需要时自行部署后修改插件地址。
 
@@ -111,13 +113,25 @@ npm --prefix xiaozhi-web run lint
 
 离线 Python 核心依赖见 `requirements-ci.txt`。提交时 CI 自动执行 Java、Python 核心及网页检查，不覆盖真实硬件、付费模型请求和所有遗留测试。
 
-本地已验证 Java 149 项、Python 核心 186 项、音乐 HTTP 4 项；网页此前 26 项测试和生产构建通过。旧完整音乐播放器测试仍有未通过项，包括与当前歌单接口不一致的旧断言；未将其计入核心回归。lint 有遗留 Hook 警告。远端 CI 结果以 GitHub Actions 页面为准。
+本轮本地核心检查：Java 169 项、Python 255 项、网页 33 项、ESP32 主机测试 16 项、STM32 运行时 15 项及 OTA 12 项通过，前端生产构建通过。lint 仍有遗留 Hook 警告。远端 CI 结果以 GitHub Actions 页面为准；这些检查不等于所有遗留测试或实机验收均已通过。
 
 ### 实机验证
 
-验证正常上电、连续对话和打断、网页聊天不唤醒、明确与空闲待命、动作回执、蓝牙进入/退出、音乐切换、提醒回应/延后/重叠/三轮未回应、等待再提醒和逾期提示、页面隐藏与设备切换、Java/Python 断线恢复。
+验证正常上电、连续对话和打断、网页聊天不唤醒、明确与空闲待命、动作回执、蓝牙进入/退出、音乐切换、提醒回应/延后/重叠/三轮未回应、等待再提醒和逾期提示、页面隐藏与设备重连、Java/Python 断线恢复。
 
 提醒每轮 45 秒，结束未回应后间隔 5 分钟，最多三轮。软件测试不能代替实机验收；当前不宣称以上硬件流程全部通过。
+
+## 固件发布与更新
+
+ESP32 在已激活的 ESP-IDF 终端运行 `python scripts/build_ota.py`（工作目录为 `xiaozhi-esp32-main`）。发布命令自动递增修订号、编译并导出 `firmware-releases/esp32/xiaozhi-版本.bin`。普通 `idf.py build` 保留版本。
+
+STM32 在项目根目录运行 `python stm32/Balance_Car_KEil_HAL/OTA/tools/build_stage1.py`。脚本自动生成递增发布号并写入应用，输出 `firmware-releases/stm32/版本/application-ota.zip`。普通 Keil 编译保留版本。网页上传时两端都自动读取固件版本；STM32 清单版本必须与新版应用内部版本一致。
+
+上传后可在固件列表选择“升级 ESP32”或“升级底盘”。上传本身不会立即升级；机器人下次启动也会检查已启用的新版本，优先完成 ESP32 更新，再在后续启动检查底盘。底盘没有报告真实发布版本时跳过自动升级，旧版底盘需先通过网页手动升级一次。电压、停稳和完整性校验继续生效；不会自动反复重试失败升级。
+
+ESP32 手动升级页面在实际读到设备运行目标版本后才显示完成。升级期间保持供电；网页暂时读不到设备应答不等于升级失败，不要重复点击。
+
+网页手动 OTA 支持进度显示：等待阶段不虚构百分比，ESP32 重新上线并确认目标版本后才显示 100%。固件列表会禁用已安装和更旧版本，升级中保持稳定供电。
 
 ## 来源与许可证
 

@@ -7,14 +7,13 @@ static uint8_t battery_count=0,battery_flag=0;
 u16 led_flag = 0;
 u16 led_twinkle_count = 0;
 u16 led_count = 0;
-u8 lower_power_flag = 0;
+volatile u8 lower_power_flag = 0;
 volatile u8 battery_sample_valid = 0;
 volatile uint32_t battery_last_update_ms = 0;
 
 u8 Battery_IsReady(uint32_t *age_ms)
 {
-    /* Sample the ISR-owned timestamp BEFORE the current time. Reading now
-     * first can underflow if TIM6 publishes a newer timestamp in between. */
+    /* MonitorTask publishes under PRIMASK; aligned word reads are atomic. */
     u8 valid = battery_sample_valid;
     uint32_t updated = battery_last_update_ms;
     uint32_t age = (uint32_t)(HAL_GetTick() - updated);
@@ -22,62 +21,48 @@ u8 Battery_IsReady(uint32_t *age_ms)
     return valid && age <= 2500U;
 }
 
-/**************************************************************************
-Function function: TIM6 initialization, timed for 10 milliseconds
-Entrance parameters: None
-Return value: None
-函数功能：TIM6初始化，定时10毫秒
-入口参数：无
-返回  值：无
-**************************************************************************/
-void TIM6_Init(void)
+void BSP_TimerPeriodElapsed(TIM_HandleTypeDef *htim)
 {
-	// 打开定时器中断
-	// Turn on timer interrupt
-	HAL_TIM_Base_Start_IT(&htim6);
+    (void)htim; /* No ADC polling or business work in timer interrupts. */
 }
 
-
-u8 bulettohflag = 0;
-
-// TIM6中断
-// 此回调函数可放多个定时器处理
-// 传入参数：定时器结构体
-// This callback function can handle multiple timers
-// Incoming parameter: Timer structure
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+void Monitor_Poll10ms(void)
 {
-	if (htim->Instance == TIM6)
-	{
-		led_count++;  //led服务显示标志 LED service display logo
-		battery_flag ++;		//电量显示标志	 Electricity display sign
-		
-        bulettohflag = 1;
-
-////////电压检测流程		 Voltage detection process
-		if(battery_flag > 2)// 30 ms at the configured 10 ms TIM6 period
-		{		
-			battery_flag = 0;
-			battery_All += Get_Battery_Volotage();//获取电源电量 Obtain the power level of the power supply
-			battery_count++;
-			if(battery_count == BATTERY_AVERAGE_SAMPLES)// about 750 ms
-			{
-				battery = battery_All/BATTERY_AVERAGE_SAMPLES; //平均值 average value
-				battery_All = 0; 
-				battery_count = 0;
-				battery_last_update_ms = HAL_GetTick();
-				battery_sample_valid = 1;
-				power_decect();//电压处理  Voltage processing
-			}
-			
-		}
-///////////
-		
-		cotrol_led();//灯服务  led service
-		
-				
-		
-	}
+    static uint32_t previous;
+    uint32_t now = HAL_GetTick();
+    uint32_t elapsed = now - previous;
+    float measured;
+    if (elapsed < 10U) return;
+    previous = now;
+    /* Do not burst ADC samples when vTaskDelayUntil catches up after a stall. */
+    if (elapsed > 2500U) {
+        battery_sample_valid = 0;
+        battery_All = 0;
+        battery_count = battery_flag = 0;
+    }
+    led_count++;
+    if (++battery_flag >= 3U) {
+        battery_flag = 0;
+        if (!Battery_TryRead(&measured)) {
+            battery_sample_valid = 0;
+            battery_All = 0;
+            battery_count = 0;
+        } else {
+            battery_All += measured;
+            if (++battery_count == BATTERY_AVERAGE_SAMPLES) {
+                uint32_t mask = __get_PRIMASK();
+                __disable_irq();
+                battery = battery_All / BATTERY_AVERAGE_SAMPLES;
+                battery_last_update_ms = HAL_GetTick();
+                battery_sample_valid = 1;
+                power_decect();
+                __set_PRIMASK(mask);
+                battery_All = 0;
+                battery_count = 0;
+            }
+        }
+    }
+    cotrol_led();
 }
 
 

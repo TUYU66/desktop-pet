@@ -2,7 +2,6 @@
 .settings-inline-section { min-width: 0; }
 .settings-inline-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; min-height: 68px; }
 .settings-inline-heading h3 { margin: 0 0 5px; font-size: 15px; color: #484848; }
-.settings-inline-heading p, .settings-control-hint { margin: 0; color: #787878; font-size: 12px; line-height: 1.6; }
 .settings-inline-section > label { display: block; margin-top: 4px; font-size: 13px; color: #4a4a4a; }
 .settings-inline-section .ant-alert { margin-top: 10px; font-size: 12px; }
 .settings-volume-heading { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: #4a4a4a; }
